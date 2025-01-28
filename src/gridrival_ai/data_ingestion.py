@@ -82,7 +82,10 @@ def load_driver_data(filepath: str) -> pd.DataFrame:
     # Ensure proper data types
     try:
         df["salary"] = pd.to_numeric(df["salary"])
-        if "rolling_avg_finish" in df.columns and df["rolling_avg_finish"].notna().any():
+        if (
+            "rolling_avg_finish" in df.columns
+            and df["rolling_avg_finish"].notna().any()
+        ):
             df["rolling_avg_finish"] = pd.to_numeric(df["rolling_avg_finish"])
     except ValueError as e:
         raise ValueError("Invalid numeric values in driver data") from e
@@ -142,7 +145,10 @@ def load_constructor_data(filepath: str) -> pd.DataFrame:
     # Ensure proper data types
     try:
         df["salary"] = pd.to_numeric(df["salary"])
-        if "rolling_avg_points" in df.columns and df["rolling_avg_points"].notna().any():
+        if (
+            "rolling_avg_points" in df.columns
+            and df["rolling_avg_points"].notna().any()
+        ):
             df["rolling_avg_points"] = pd.to_numeric(df["rolling_avg_points"])
     except ValueError as e:
         raise ValueError("Invalid numeric values in constructor data") from e
@@ -153,4 +159,4 @@ def load_constructor_data(filepath: str) -> pd.DataFrame:
 
     # Return DataFrame with standardized column order
     final_columns = required_cols + list(optional_cols.keys())
-    return df[final_columns] 
+    return df[final_columns]

@@ -24,4 +24,4 @@ class Scorer:
             "podium": 15.0,
             "points_finish": 10.0,
             "fastest_lap": 5.0,
-        } 
+        }

@@ -19,4 +19,4 @@ class SalaryManager:
 
     def __init__(self, initial_values: Optional[Dict[str, float]] = None) -> None:
         """Initialize the salary manager."""
-        self.values = initial_values or {} 
+        self.values = initial_values or {}

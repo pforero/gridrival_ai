@@ -98,7 +98,12 @@ def test_load_constructor_data_full(tmp_path, valid_constructor_csv):
     # Check the DataFrame properties
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 3
-    assert list(df.columns) == ["constructor_id", "name", "salary", "rolling_avg_points"]
+    assert list(df.columns) == [
+        "constructor_id",
+        "name",
+        "salary",
+        "rolling_avg_points",
+    ]
     assert df["constructor_id"].iloc[0] == "RBR"
     assert df["name"].iloc[0] == "Red Bull Racing"
     assert df["salary"].iloc[0] == 35.5
@@ -125,11 +130,13 @@ def test_missing_required_columns_driver(tmp_path):
     csv_data = """driver_id,name
 VER,Max Verstappen
 HAM,Lewis Hamilton"""
-    
+
     csv_path = tmp_path / "invalid_drivers.csv"
     csv_path.write_text(csv_data)
 
-    with pytest.raises(ValueError, match="Missing required columns in driver data: salary"):
+    with pytest.raises(
+        ValueError, match="Missing required columns in driver data: salary"
+    ):
         load_driver_data(str(csv_path))
 
 
@@ -139,11 +146,13 @@ def test_missing_required_columns_constructor(tmp_path):
     csv_data = """constructor_id,name
 RBR,Red Bull Racing
 MER,Mercedes"""
-    
+
     csv_path = tmp_path / "invalid_constructors.csv"
     csv_path.write_text(csv_data)
 
-    with pytest.raises(ValueError, match="Missing required columns in constructor data: salary"):
+    with pytest.raises(
+        ValueError, match="Missing required columns in constructor data: salary"
+    ):
         load_constructor_data(str(csv_path))
 
 
@@ -152,7 +161,7 @@ def test_invalid_numeric_values_driver(tmp_path):
     csv_data = """driver_id,name,salary
 VER,Max Verstappen,invalid
 HAM,Lewis Hamilton,42.0"""
-    
+
     csv_path = tmp_path / "invalid_numeric_drivers.csv"
     csv_path.write_text(csv_data)
 
@@ -165,7 +174,7 @@ def test_invalid_numeric_values_constructor(tmp_path):
     csv_data = """constructor_id,name,salary
 RBR,Red Bull Racing,invalid
 MER,Mercedes,32.0"""
-    
+
     csv_path = tmp_path / "invalid_numeric_constructors.csv"
     csv_path.write_text(csv_data)
 
@@ -176,4 +185,4 @@ MER,Mercedes,32.0"""
 def test_nonexistent_file():
     """Test error handling when file does not exist."""
     with pytest.raises(FileNotFoundError):
-        load_driver_data("nonexistent_file.csv") 
+        load_driver_data("nonexistent_file.csv")

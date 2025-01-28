@@ -28,4 +28,4 @@ __all__ = [
     "Contract",
     "Scorer",
     "SalaryManager",
-] 
+]

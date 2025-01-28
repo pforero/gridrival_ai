@@ -19,4 +19,4 @@ class Team:
 
     def __init__(self, budget: float) -> None:
         """Initialize a new team instance."""
-        self.budget = budget 
+        self.budget = budget

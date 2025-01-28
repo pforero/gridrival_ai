@@ -21,4 +21,4 @@ class Optimizer:
 
     def __init__(self, budget: float) -> None:
         """Initialize the optimizer with a budget."""
-        self.budget = budget 
+        self.budget = budget

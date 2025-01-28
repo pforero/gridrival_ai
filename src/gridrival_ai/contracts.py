@@ -23,4 +23,4 @@ class Contract:
     def __init__(self, name: str, value: float) -> None:
         """Initialize a new contract."""
         self.name = name
-        self.value = value 
+        self.value = value
