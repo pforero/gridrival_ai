@@ -117,6 +117,26 @@ class PositionDistributions:
         probs2 = self.get_session_probabilities(driver_id, session2)
         return {(p1, p2): probs1[p1] * probs2[p2] for p1 in probs1 for p2 in probs2}
 
+    def get_completion_probability(self, driver_id: int) -> float:
+        """Get completion probability for a driver.
+
+        Parameters
+        ----------
+        driver_id : int
+            Driver ID
+
+        Returns
+        -------
+        float
+            Probability of completing each stage of the race
+
+        Raises
+        ------
+        KeyError
+            If driver_id not found
+        """
+        return self.driver_distributions[driver_id].completion_prob
+
     def get_available_sessions(self) -> Set[str]:
         """Get set of available session names.
 

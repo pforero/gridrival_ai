@@ -96,6 +96,21 @@ def test_from_session_probabilities(simple_probabilities):
     )
 
 
+def test_get_completion_probability(simple_probabilities, position_distributions):
+    """Test getting completion probability for a driver."""
+    # Default completion probability should be 0.95
+    assert position_distributions.get_completion_probability(1) == 0.95
+
+    # Test with custom completion probability
+    driver_dist = DriverDistribution(race=simple_probabilities, completion_prob=0.8)
+    custom_distributions = PositionDistributions({1: driver_dist})
+    assert custom_distributions.get_completion_probability(1) == 0.8
+
+    # Test invalid driver ID
+    with pytest.raises(KeyError):
+        position_distributions.get_completion_probability(999)
+
+
 def test_get_available_sessions(position_distributions):
     """Test getting available session names."""
     sessions = position_distributions.get_available_sessions()

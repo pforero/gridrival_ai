@@ -25,6 +25,7 @@ def test_basic_race_distribution(valid_race_probs):
     assert dist.race == valid_race_probs
     assert dist.qualifying == valid_race_probs
     assert dist.sprint == valid_race_probs
+    assert dist.completion_prob == 0.95
 
 
 def test_full_distribution(valid_race_probs):
@@ -76,6 +77,17 @@ def test_full_distribution(valid_race_probs):
 
 def test_invalid_probabilities(valid_race_probs):
     """Test that invalid probabilities raise DistributionError."""
+    # Test for invalid completion probability
+    with pytest.raises(
+        DistributionError, match="completion_prob must be between 0 and 1"
+    ):
+        DriverDistribution(race=valid_race_probs, completion_prob=1.2)
+
+    with pytest.raises(
+        DistributionError, match="completion_prob must be between 0 and 1"
+    ):
+        DriverDistribution(race=valid_race_probs, completion_prob=-0.1)
+
     # Test for invalid probability value
     invalid_probs = valid_race_probs.probabilities.copy()
     invalid_probs[1] = 1.2  # Invalid probability > 1
@@ -119,3 +131,9 @@ def test_missing_positions(valid_race_probs):
 
     with pytest.raises(DistributionError):
         DriverDistribution(race=SessionProbabilities(probabilities=incomplete_probs))
+
+
+def test_custom_completion_prob(valid_race_probs):
+    """Test that custom completion probability is set correctly."""
+    dist = DriverDistribution(race=valid_race_probs, completion_prob=0.8)
+    assert dist.completion_prob == 0.8

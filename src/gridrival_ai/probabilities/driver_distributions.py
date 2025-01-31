@@ -6,8 +6,13 @@ across different sessions for a single driver.
 """
 
 from dataclasses import dataclass
+from typing import Optional
 
-from gridrival_ai.probabilities.types import JointProbabilities, SessionProbabilities
+from gridrival_ai.probabilities.types import (
+    DistributionError,
+    JointProbabilities,
+    SessionProbabilities,
+)
 
 
 @dataclass(frozen=True)
@@ -24,11 +29,19 @@ class DriverDistribution:
         Sprint position probabilities. If None, race probabilities are used.
     joint_qual_race : JointProbabilities | None, optional
         Joint qualifying/race position probabilities. If None, independence is assumed.
+    completion_prob : float, optional
+        Probability of completing each stage of the race, by default 0.95.
+        A completion_prob of 0.95 means:
+        - 95% chance of reaching 25% distance
+        - 90% chance of reaching 50% distance
+        - 86% chance of reaching 75% distance
+        - 81% chance of reaching 90% distance
 
     Notes
     -----
     Race probabilities are required and used as defaults for other sessions.
     If joint probabilities are not provided, independence is assumed.
+    Completion probability must be between 0 and 1.
 
     Examples
     --------
@@ -47,17 +60,26 @@ class DriverDistribution:
     ...         session1="qualifying",
     ...         session2="race",
     ...         probabilities={(1, 1): 0.4, (1, 2): 0.2, (2, 1): 0.1, (2, 2): 0.3}
-    ...     )
+    ...     ),
+    ...     completion_prob=0.90  # More conservative completion probability
     ... )
     """
 
     race: SessionProbabilities
-    qualifying: SessionProbabilities | None = None
-    sprint: SessionProbabilities | None = None
-    joint_qual_race: JointProbabilities | None = None
+    qualifying: Optional[SessionProbabilities] = None
+    sprint: Optional[SessionProbabilities] = None
+    joint_qual_race: Optional[JointProbabilities] = None
+    completion_prob: float = 0.95
 
     def __post_init__(self) -> None:
-        """Initialize with defaults if needed."""
+        """Initialize with defaults if needed and validate completion probability."""
+        # Validate completion probability
+        if not 0 <= self.completion_prob <= 1:
+            raise DistributionError(
+                "completion_prob must be between 0 and 1"
+                f" (got {self.completion_prob})"
+            )
+
         # Set qualifying and sprint to race probabilities if not provided
         object.__setattr__(
             self,
