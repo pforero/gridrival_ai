@@ -1,12 +1,13 @@
-# cSpell: ignore rtol, atol, allclose, newaxis
-"""Tests for the position probability converter."""
+"""Tests for the odds to position probability converter."""
 
 from typing import Dict
 
 import numpy as np
 import pytest
 
-from gridrival_ai.position_probabilities import PositionProbabilityConverter
+from gridrival_ai.probabilities.odds_to_probabilities import (
+    OddsToPositionProbabilityConverter,
+)
 
 # Mark all tests in this module as slow by default
 pytestmark = pytest.mark.slow
@@ -14,7 +15,7 @@ pytestmark = pytest.mark.slow
 
 @pytest.fixture
 def sample_converter():
-    """Create sample PositionProbabilityConverter for testing with 20 drivers."""
+    """Create sample OddsToPositionProbabilityConverter for testing with 20 drivers."""
     # Create base odds with implied probabilities within target ranges
     odds = []
 
@@ -65,12 +66,12 @@ def sample_converter():
             }
         )
 
-    return PositionProbabilityConverter(odds)
+    return OddsToPositionProbabilityConverter(odds)
 
 
 @pytest.fixture
 def minimal_converter():
-    """Create minimal PositionProbabilityConverter with only winner market for 20
+    """Create minimal OddsToPositionProbabilityConverter with only winner market for 20
     drivers.
     """
     odds = []
@@ -90,19 +91,19 @@ def minimal_converter():
     for i in range(16, 21):
         odds.append({"driver_id": f"D{i:02d}", "1": 250.0})  # 0.4% each
 
-    return PositionProbabilityConverter(odds)
+    return OddsToPositionProbabilityConverter(odds)
 
 
 @pytest.fixture
 def small_converter():
-    """Create small PositionProbabilityConverter for testing with 3 drivers.
+    """Create small OddsToPositionProbabilityConverter for testing with 3 drivers.
 
     Creates a converter with clear probability preferences:
     - D1: Strong favorite (~67% win probability)
     - D2: Second favorite (~33% win probability)
     - D3: Underdog (~17% win probability)
     """
-    return PositionProbabilityConverter(
+    return OddsToPositionProbabilityConverter(
         [
             {"driver_id": "D1", "1": 1.5},  # ~67% win probability
             {"driver_id": "D2", "1": 3.0},  # ~33% win probability
@@ -112,7 +113,7 @@ def small_converter():
 
 
 def test_initialization(sample_converter, minimal_converter):
-    """Test proper initialization of PositionProbabilityConverter.
+    """Test proper initialization of OddsToPositionProbabilityConverter.
 
     Tests:
     1. Drivers list contains all drivers from odds
@@ -138,7 +139,7 @@ def test_initialization(sample_converter, minimal_converter):
             {"driver_id": "D1", "3": 1.2},
             {"driver_id": "D2", "3": 1.5},
         ]
-        PositionProbabilityConverter(odds)
+        OddsToPositionProbabilityConverter(odds)
 
 
 def test_calculate_expected_positions(minimal_converter):

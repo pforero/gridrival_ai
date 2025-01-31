@@ -7,7 +7,7 @@ probability distributions for race finishing positions. It uses advanced optimiz
 techniques to ensure the resulting probabilities are consistent with market odds while
 maintaining mathematical properties like proper probability distributions.
 
-The main class PositionProbabilityConverter handles:
+The main class OddsToPositionProbabilityConverter handles:
 - Bookmaker margin removal
 - Favorite-longshot bias adjustment
 - Market constraint satisfaction
@@ -26,7 +26,7 @@ SMOOTHNESS_ALPHA = 5.0
 SHAPE_ALPHA = 7.0
 
 
-class PositionProbabilityConverter:
+class OddsToPositionProbabilityConverter:
     """Convert decimal odds to valid probability distributions using optimization.
 
     This class implements a robust method to convert decimal betting odds into proper
@@ -86,7 +86,7 @@ class PositionProbabilityConverter:
     ...     {"driver_id": "HAM", "1": 3.0, "3": 1.5},
     ...     {"driver_id": "LEC", "1": 4.0, "3": 1.8}
     ... ]
-    >>> converter = PositionProbabilityConverter(odds)
+    >>> converter = OddsToPositionProbabilityConverter(odds)
     >>> probs = converter.calculate_position_probabilities()
     >>> print(probs["VER"][1])  # Probability of VER finishing 1st
     0.55
