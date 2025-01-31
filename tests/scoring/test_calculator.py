@@ -12,6 +12,25 @@ from gridrival_ai.scoring.types import Positions, RaceFormat, RaceWeekendData
 
 
 @pytest.fixture
+def scoring_config():
+    """Create a sample scoring configuration for testing."""
+    # Create points for all positions (1-20)
+    qualifying_points = {i: max(0, 10 - (i - 1)) for i in range(1, 21)}
+    race_points = {i: max(0, 25 - (i - 1) * 3) for i in range(1, 21)}
+    sprint_points = {i: max(0, 8 - (i - 1)) for i in range(1, 9)}
+
+    return ScoringConfig(
+        qualifying_points=qualifying_points,
+        race_points=race_points,
+        sprint_points=sprint_points,
+        completion_stage_points=5.0,
+        overtake_multiplier=2.0,
+        minimum_points=650,
+        talent_multiplier=2.0,
+    )
+
+
+@pytest.fixture
 def default_config() -> ScoringConfig:
     """Create default scoring configuration."""
     return ScoringConfig()
