@@ -20,14 +20,12 @@ from gridrival_ai.contracts import Contract
 from gridrival_ai.optimization import Optimizer
 from gridrival_ai.position_probabilities import PositionProbabilityConverter
 from gridrival_ai.salary import SalaryManager
-from gridrival_ai.scoring import Scorer
 from gridrival_ai.team import Team
 
 __all__ = [
     "Team",
     "Optimizer",
     "Contract",
-    "Scorer",
     "SalaryManager",
     "PositionProbabilityConverter",
 ]
