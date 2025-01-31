@@ -10,6 +10,7 @@ class DriverStats:
     rolling_averages : Dict[str, float]
         Mapping of driver_id to 8-race rolling average finish position
     """
+
     rolling_averages: dict[str, float]
 
     def __post_init__(self):

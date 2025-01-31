@@ -1,7 +1,6 @@
 """Core classes for F1 data structures."""
 
 from dataclasses import dataclass
-from typing import List
 
 
 @dataclass(frozen=True)
@@ -11,28 +10,27 @@ class Pilot:
     Parameters
     ----------
     driver_id : str
-        Unique identifier for the driver
+        Three letter abbreviation used as unique identifier
     name : str
         Full name of the driver
-    abbreviation : str
-        Three letter abbreviation used in timing screens
 
     Raises
     ------
     ValueError
-        If abbreviation is not exactly 3 letters
+        If driver_id is not exactly 3 letters
     """
 
     driver_id: str
     name: str
-    abbreviation: str
 
     def __post_init__(self) -> None:
-        """Validate the abbreviation."""
-        if len(self.abbreviation) != 3:
-            raise ValueError("Abbreviation must be exactly 3 letters")
-        if not self.abbreviation.isalpha():
-            raise ValueError("Abbreviation must contain only letters")
+        """Validate the driver_id."""
+        if len(self.driver_id) != 3:
+            raise ValueError("Driver ID must be exactly 3 letters")
+        if not self.driver_id.isalpha():
+            raise ValueError("Driver ID must contain only letters")
+        if not self.driver_id.isupper():
+            raise ValueError("Driver ID must be uppercase")
 
 
 @dataclass(frozen=True)
@@ -42,33 +40,40 @@ class Constructor:
     Parameters
     ----------
     constructor_id : str
-        Unique identifier for the constructor
+        Three letter abbreviation used as unique identifier
     name : str
         Full name of the constructor
-    abbreviation : str
-        Three letter abbreviation used in timing screens
-    drivers : List[Pilot]
-        List of two drivers for this constructor
+    drivers : tuple[str, str]
+        Tuple of two driver IDs for this constructor
 
     Raises
     ------
     ValueError
-        If abbreviation is not exactly 3 letters or if not exactly 2 drivers
+        If constructor_id is not exactly 3 letters or if not exactly 2 drivers
     """
 
     constructor_id: str
     name: str
-    abbreviation: str
-    drivers: List[Pilot]
+    drivers: tuple[str, str]
 
     def __post_init__(self) -> None:
-        """Validate the abbreviation and drivers."""
-        if len(self.abbreviation) != 3:
-            raise ValueError("Abbreviation must be exactly 3 letters")
-        if not self.abbreviation.isalpha():
-            raise ValueError("Abbreviation must contain only letters")
+        """Validate the constructor_id and drivers."""
+        if len(self.constructor_id) != 3:
+            raise ValueError("Constructor ID must be exactly 3 letters")
+        if not self.constructor_id.isalpha():
+            raise ValueError("Constructor ID must contain only letters")
+        if not self.constructor_id.isupper():
+            raise ValueError("Constructor ID must be uppercase")
         if len(self.drivers) != 2:
             raise ValueError("Constructor must have exactly 2 drivers")
+        # Validate driver IDs
+        for driver_id in self.drivers:
+            if len(driver_id) != 3:
+                raise ValueError("Driver ID must be exactly 3 letters")
+            if not driver_id.isalpha():
+                raise ValueError("Driver ID must contain only letters")
+            if not driver_id.isupper():
+                raise ValueError("Driver ID must be uppercase")
 
 
 @dataclass(frozen=True)

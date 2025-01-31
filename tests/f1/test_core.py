@@ -8,64 +8,63 @@ from gridrival_ai.f1.core import Constructor, Pilot, Race
 def test_pilot_creation():
     """Test basic pilot creation and validation."""
     # Valid pilot
-    pilot = Pilot(driver_id="VER", name="Max Verstappen", abbreviation="VER")
+    pilot = Pilot(driver_id="VER", name="Max Verstappen")
     assert pilot.driver_id == "VER"
     assert pilot.name == "Max Verstappen"
-    assert pilot.abbreviation == "VER"
 
-    # Invalid abbreviation length
+    # Invalid driver_id length
     with pytest.raises(ValueError, match="must be exactly 3 letters"):
-        Pilot(driver_id="VER", name="Max Verstappen", abbreviation="VERST")
+        Pilot(driver_id="VERST", name="Max Verstappen")
 
-    # Invalid abbreviation characters
+    # Invalid driver_id characters
     with pytest.raises(ValueError, match="must contain only letters"):
-        Pilot(driver_id="VER", name="Max Verstappen", abbreviation="V3R")
+        Pilot(driver_id="V3R", name="Max Verstappen")
 
 
 def test_constructor_creation():
     """Test basic constructor creation and validation."""
-    pilot1 = Pilot(driver_id="VER", name="Max Verstappen", abbreviation="VER")
-    pilot2 = Pilot(driver_id="PER", name="Sergio Perez", abbreviation="PER")
-
     # Valid constructor
     constructor = Constructor(
         constructor_id="RBR",
         name="Red Bull Racing",
-        abbreviation="RBR",
-        drivers=[pilot1, pilot2],
+        drivers=("VER", "PER"),
     )
     assert constructor.constructor_id == "RBR"
     assert constructor.name == "Red Bull Racing"
-    assert constructor.abbreviation == "RBR"
     assert len(constructor.drivers) == 2
-    assert constructor.drivers[0] == pilot1
-    assert constructor.drivers[1] == pilot2
+    assert constructor.drivers[0] == "VER"
+    assert constructor.drivers[1] == "PER"
 
     # Invalid number of drivers
     with pytest.raises(ValueError, match="must have exactly 2 drivers"):
         Constructor(
             constructor_id="RBR",
             name="Red Bull Racing",
-            abbreviation="RBR",
-            drivers=[pilot1],
+            drivers=("VER",),
         )
 
-    # Invalid abbreviation length
+    # Invalid constructor_id length
     with pytest.raises(ValueError, match="must be exactly 3 letters"):
         Constructor(
-            constructor_id="RBR",
+            constructor_id="REDB",
             name="Red Bull Racing",
-            abbreviation="REDB",
-            drivers=[pilot1, pilot2],
+            drivers=("VER", "PER"),
         )
 
-    # Invalid abbreviation characters
+    # Invalid constructor_id characters
     with pytest.raises(ValueError, match="must contain only letters"):
+        Constructor(
+            constructor_id="RB1",
+            name="Red Bull Racing",
+            drivers=("VER", "PER"),
+        )
+
+    # Invalid driver_id
+    with pytest.raises(ValueError, match="Driver ID must be exactly 3 letters"):
         Constructor(
             constructor_id="RBR",
             name="Red Bull Racing",
-            abbreviation="RB1",
-            drivers=[pilot1, pilot2],
+            drivers=("VER", "PEREZ"),
         )
 
 
