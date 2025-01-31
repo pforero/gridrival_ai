@@ -44,11 +44,16 @@ CONSTRUCTORS_LIST_2025: List[tuple[str, str, tuple[str, str]]] = [
     ("HAA", "Haas", ("OCO", "BEA")),
 ]
 
-# Create DriverId type dynamically from the drivers list
-DriverId = Literal[tuple(driver[0] for driver in DRIVERS_2025)]  # type: ignore
+# Explicit string literals for driver IDs
+DriverId = Literal[
+    "VER", "LAW", "RUS", "ANT", "LEC", "HAM", "NOR", "PIA", "ALO", "STR",
+    "GAS", "DOO", "ALB", "SAI", "TSU", "HAD", "HUL", "BOR", "OCO", "BEA"
+]
 
-# Create ConstructorId type dynamically from the constructors list
-ConstructorId = Literal[tuple(constructor[0] for constructor in CONSTRUCTORS_LIST_2025)]  # type: ignore
+# Explicit string literals for constructor IDs
+ConstructorId = Literal[
+    "RBR", "MER", "FER", "MCL", "AST", "ALP", "WIL", "RBU", "SAU", "HAA"
+]
 
 # Create pilots dictionary dynamically
 PILOTS_2025: Dict[str, Pilot] = {
