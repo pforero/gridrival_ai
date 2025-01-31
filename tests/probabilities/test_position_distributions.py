@@ -42,15 +42,15 @@ def test_get_session_probabilities(position_distributions, simple_probabilities)
     """Test getting probabilities for different sessions."""
     # Test qualifying probabilities
     qual_probs = position_distributions.get_session_probabilities(1, "qualifying")
-    assert qual_probs == simple_probabilities.probabilities
+    assert qual_probs == simple_probabilities
 
     # Test race probabilities
     race_probs = position_distributions.get_session_probabilities(1, "race")
-    assert race_probs == simple_probabilities.probabilities
+    assert race_probs == simple_probabilities
 
     # Test sprint probabilities
     sprint_probs = position_distributions.get_session_probabilities(1, "sprint")
-    assert sprint_probs == simple_probabilities.probabilities
+    assert sprint_probs == simple_probabilities
 
 
 def test_get_joint_probabilities(position_distributions):
@@ -89,10 +89,10 @@ def test_from_session_probabilities(simple_probabilities):
     assert 1 in dist.driver_distributions
     assert (
         dist.get_session_probabilities(1, "qualifying")
-        == simple_probabilities.probabilities
+        == simple_probabilities
     )
     assert (
-        dist.get_session_probabilities(1, "race") == simple_probabilities.probabilities
+        dist.get_session_probabilities(1, "race") == simple_probabilities
     )
 
 

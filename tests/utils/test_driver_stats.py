@@ -2,7 +2,19 @@
 
 import pytest
 
-from gridrival_ai.utils.driver_stats import DriverStats
+from gridrival_ai.utils.driver_stats import DriverStats, validate_driver_id
+
+
+def test_validate_driver_id():
+    """Test driver ID validation."""
+    # Valid driver ID
+    validate_driver_id("VER")  # Should not raise
+
+    # Unknown driver ID (should warn but not raise)
+    with pytest.warns(
+        UserWarning, match="Driver ID XYZ is not in the list of known drivers"
+    ):
+        validate_driver_id("XYZ")
 
 
 def test_driver_stats_creation():

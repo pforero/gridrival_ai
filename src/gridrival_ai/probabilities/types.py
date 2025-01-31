@@ -17,6 +17,8 @@ Examples
 >>> # Create a simple session distribution
 >>> probs = {1: 0.6, 2: 0.4}
 >>> session_dist = SessionProbabilities(probabilities=probs)
+>>> session_dist[1]  # Returns 0.6
+>>> session_dist[2]  # Returns 0.4
 
 >>> # Create a joint distribution
 >>> joint_probs = {(1, 1): 0.4, (1, 2): 0.2, (2, 1): 0.1, (2, 2): 0.3}
@@ -25,6 +27,7 @@ Examples
 ...     session2="race",
 ...     probabilities=joint_probs
 ... )
+>>> joint_dist[(1, 1)]  # Returns 0.4
 """
 
 from dataclasses import dataclass
@@ -54,6 +57,12 @@ class SessionProbabilities:
     -----
     Probabilities must sum to 1.0 and be between 0 and 1.
     Positions must be between 1 and MAX_POSITION.
+
+    Examples
+    --------
+    >>> probs = SessionProbabilities({1: 0.6, 2: 0.4})
+    >>> probs[1]  # Returns 0.6
+    >>> probs[2]  # Returns 0.4
     """
 
     probabilities: Dict[int, float]
@@ -74,6 +83,26 @@ class SessionProbabilities:
         if not np.isclose(total, 1.0, rtol=1e-5):
             raise DistributionError(f"Probabilities sum to {total} (must sum to 1.0)")
 
+    def __getitem__(self, position: int) -> float:
+        """Get probability for a position.
+
+        Parameters
+        ----------
+        position : int
+            Position to get probability for (1-20)
+
+        Returns
+        -------
+        float
+            Probability of finishing in that position
+
+        Raises
+        ------
+        KeyError
+            If position not in distribution
+        """
+        return self.probabilities[position]
+
 
 @dataclass(frozen=True)
 class JointProbabilities:
@@ -92,6 +121,12 @@ class JointProbabilities:
     -----
     Probabilities must sum to 1.0 and marginals must match individual
     session distributions.
+
+    Examples
+    --------
+    >>> joint_probs = {(1, 1): 0.4, (1, 2): 0.2, (2, 1): 0.1, (2, 2): 0.3}
+    >>> dist = JointProbabilities("qualifying", "race", joint_probs)
+    >>> dist[(1, 1)]  # Returns 0.4
     """
 
     session1: str
@@ -125,3 +160,23 @@ class JointProbabilities:
             raise DistributionError(
                 f"Joint probabilities sum to {total} (must sum to 1.0)"
             )
+
+    def __getitem__(self, positions: Tuple[int, int]) -> float:
+        """Get joint probability for a pair of positions.
+
+        Parameters
+        ----------
+        positions : Tuple[int, int]
+            Position pair to get probability for (pos1, pos2)
+
+        Returns
+        -------
+        float
+            Joint probability of finishing in those positions
+
+        Raises
+        ------
+        KeyError
+            If position pair not in distribution
+        """
+        return self.probabilities[positions]

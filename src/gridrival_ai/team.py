@@ -111,14 +111,14 @@ class Team:
         self.bank_balance -= contract.salary
         self.constructor_contract = contract
 
-    def remove_driver(self, element_id: int) -> None:
+    def remove_driver(self, element_id: str) -> None:
         """
         Remove a driver contract from the team.
 
         Parameters
         ----------
-        element_id : int
-            ID of the driver to remove.
+        element_id : str
+            Three-letter abbreviation of the driver to remove.
 
         Raises
         ------

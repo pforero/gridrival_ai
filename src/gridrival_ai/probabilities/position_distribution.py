@@ -40,53 +40,56 @@ class PositionDistributions:
     ...     qualifying_probs, race_probs)
     """
 
+    VALID_SESSIONS = {"qualifying", "race", "sprint"}
+
     def __init__(self, driver_distributions: Dict[int, DriverDistribution]):
         """Initialize with driver distributions."""
         self.driver_distributions = driver_distributions
 
     def get_session_probabilities(
-        self, driver_id: int, session: str
-    ) -> Dict[int, float]:
-        """Get probability distribution for a session.
+        self, driver_id: str, session: str
+    ) -> SessionProbabilities:
+        """Get position probabilities for a driver in a session.
 
         Parameters
         ----------
-        driver_id : int
-            Driver ID
+        driver_id : str
+            Driver three-letter abbreviation
         session : str
             Session name ("qualifying", "race", or "sprint")
 
         Returns
         -------
-        Dict[int, float]
-            Mapping of positions to probabilities
+        SessionProbabilities
+            Probability distribution object that can be accessed like a dictionary
+            mapping positions to probabilities
 
         Raises
         ------
         KeyError
-            If driver_id not found
+            If driver_id not found or session not available
         ValueError
-            If session name invalid
+            If session name is invalid
+
+        Examples
+        --------
+        >>> probs = dist.get_session_probabilities("VER", "race")
+        >>> p1_prob = probs[1]  # Get probability of P1
         """
-        driver = self.driver_distributions[driver_id]
-        if session == "qualifying":
-            return driver.qualifying.probabilities
-        elif session == "race":
-            return driver.race.probabilities
-        elif session == "sprint":
-            return driver.sprint.probabilities
-        else:
+        if session not in self.VALID_SESSIONS:
             raise ValueError(f"Invalid session name: {session}")
 
+        return getattr(self.driver_distributions[driver_id], session)
+
     def get_joint_probabilities(
-        self, driver_id: int, session1: str, session2: str
-    ) -> Dict[Tuple[int, int], float]:
-        """Get joint probability distribution between two sessions.
+        self, driver_id: str, session1: str, session2: str
+    ) -> JointProbabilities:
+        """Get joint position probabilities for a driver across two sessions.
 
         Parameters
         ----------
-        driver_id : int
-            Driver ID
+        driver_id : str
+            Driver three-letter abbreviation
         session1 : str
             First session name
         session2 : str
@@ -94,36 +97,35 @@ class PositionDistributions:
 
         Returns
         -------
-        Dict[Tuple[int, int], float]
-            Mapping of position pairs to probabilities
+        JointProbabilities
+            Probability distribution object that can be accessed like a dictionary
+            mapping position pairs to probabilities
 
-        Notes
-        -----
-        Currently only supports qualifying-race joint probabilities.
-        Other combinations assume independence.
+        Raises
+        ------
+        KeyError
+            If driver_id not found or sessions not available
+        ValueError
+            If session combination is not supported
+
+        Examples
+        --------
+        >>> joint_probs = dist.get_joint_probabilities("VER", "qualifying", "race")
+        >>> p1_p1_prob = joint_probs[(1, 1)]  # Get probability of P1 in both sessions
         """
-        driver = self.driver_distributions[driver_id]
+        if session1 == "qualifying" and session2 == "race":
+            return self.driver_distributions[driver_id].joint_qual_race
+        raise ValueError(
+            f"Joint probabilities not available for {session1} and {session2}"
+        )
 
-        # Handle qualifying-race joint probabilities
-        if {session1, session2} == {"qualifying", "race"}:
-            probs = driver.joint_qual_race.probabilities
-            # Swap if needed to match requested order
-            if session1 == "race":
-                return {(p2, p1): prob for (p1, p2), prob in probs.items()}
-            return probs
-
-        # For other combinations, assume independence
-        probs1 = self.get_session_probabilities(driver_id, session1)
-        probs2 = self.get_session_probabilities(driver_id, session2)
-        return {(p1, p2): probs1[p1] * probs2[p2] for p1 in probs1 for p2 in probs2}
-
-    def get_completion_probability(self, driver_id: int) -> float:
+    def get_completion_probability(self, driver_id: str) -> float:
         """Get completion probability for a driver.
 
         Parameters
         ----------
-        driver_id : int
-            Driver ID
+        driver_id : str
+            Driver three-letter abbreviation
 
         Returns
         -------
