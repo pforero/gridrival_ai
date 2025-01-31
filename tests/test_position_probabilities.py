@@ -8,6 +8,9 @@ import pytest
 
 from gridrival_ai.position_probabilities import PositionProbabilityConverter
 
+# Mark all tests in this module as slow by default
+pytestmark = pytest.mark.slow
+
 
 @pytest.fixture
 def sample_converter():
