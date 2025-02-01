@@ -8,6 +8,7 @@ from gridrival_ai.probabilities.position_distribution import PositionDistributio
 from gridrival_ai.probabilities.types import JointProbabilities, SessionProbabilities
 from gridrival_ai.scoring.base import ScoringConfig
 from gridrival_ai.scoring.calculator import Scorer
+from gridrival_ai.scoring.types import RaceFormat
 from gridrival_ai.utils.driver_stats import DriverStats
 
 
@@ -43,6 +44,7 @@ def create_distribution():
     def _create(
         qualifying: dict[int, float],
         race: dict[int, float],
+        sprint: dict[int, float],
         completion_prob: float = 1.0,
     ) -> DriverDistribution:
         """Create distribution with specified probabilities."""
@@ -50,6 +52,8 @@ def create_distribution():
         qual_probs.update(qualifying)
         race_probs = {i: 0.0 for i in range(1, 21)}
         race_probs.update(race)
+        sprint_probs = {i: 0.0 for i in range(1, 21)}
+        sprint_probs.update(sprint)
 
         # Create joint probabilities assuming independence
         joint_probs = {
@@ -61,6 +65,7 @@ def create_distribution():
         return DriverDistribution(
             qualifying=SessionProbabilities(qual_probs),
             race=SessionProbabilities(race_probs),
+            sprint=SessionProbabilities(sprint_probs),
             joint_qual_race=JointProbabilities(
                 session1="qualifying",
                 session2="race",
@@ -76,28 +81,33 @@ def create_distribution():
 def position_distributions(create_distribution):
     """Create position distributions for testing."""
     distributions = {
-        # VER: Always P1 in qualifying and race
+        # VER: Always P1 in qualifying, race and sprint
         "VER": create_distribution(
             qualifying={1: 1.0},
             race={1: 1.0},
+            sprint={1: 1.0},  # Same as race
             completion_prob=1.0,
         ),
-        # LAW: P3 in qualifying, P2 in race
+        # LAW: P3 in qualifying, P2 in race/sprint
         "LAW": create_distribution(
             qualifying={3: 1.0},
             race={2: 1.0},
+            sprint={2: 1.0},  # Same as race
             completion_prob=0.95,
         ),
-        # ALO: 50% P2 and 50% P3 in qualifying, 50% P3 and 50% P4 in race
+        # ALO: 50% P2 and 50% P3 in qualifying, 50% P3 and 50% P4 in race/sprint
         "ALO": create_distribution(
             qualifying={2: 0.5, 3: 0.5},
             race={3: 0.5, 4: 0.5},
+            sprint={3: 0.5, 4: 0.5},  # Same as race
             completion_prob=0.90,
         ),
         # STR: 50% P4 and 50% P5 in qualifying, 50% P4 and 50% P5 in race
+        # Sprint: 50% P9 and 50% P10 (no points)
         "STR": create_distribution(
             qualifying={4: 0.5, 5: 0.5},
             race={4: 0.5, 5: 0.5},
+            sprint={9: 0.5, 10: 0.5},  # Outside points positions
             completion_prob=0.90,
         ),
     }
@@ -117,29 +127,40 @@ def calculator(position_distributions, scorer, driver_stats):
 def test_base_points_calculation(calculator):
     """Test calculation of qualifying and race points."""
     # VER: Deterministic P1 in both sessions
-    points = calculator.calculate_driver_points("VER")
+    points = calculator.calculate_driver_points("VER", format=RaceFormat.STANDARD)
     assert points["qualifying"] == 50.0  # P1 in qualifying
     assert points["race"] == 100.0  # P1 in race
     assert "sprint" not in points  # Standard format
 
-    # LAW: P3 qualifying, P2 race
-    points = calculator.calculate_driver_points("LAW")
+    # Test sprint format
+    points = calculator.calculate_driver_points("VER", format=RaceFormat.SPRINT)
+    assert points["qualifying"] == 50.0  # P1 in qualifying
+    assert points["race"] == 100.0  # P1 in race
+    assert points["sprint"] == 8.0  # P1 in sprint (8 points)
+
+    # LAW: P3 qualifying, P2 race/sprint
+    points = calculator.calculate_driver_points("LAW", format=RaceFormat.SPRINT)
     assert points["qualifying"] == 46.0  # P3 in qualifying
     assert points["race"] == 97.0  # P2 in race
+    assert points["sprint"] == 7.0  # P2 in sprint (7 points)
 
     # ALO: Mixed probabilities
-    points = calculator.calculate_driver_points("ALO")
+    points = calculator.calculate_driver_points("ALO", format=RaceFormat.SPRINT)
     # Qualifying: 0.5 * P2(48) + 0.5 * P3(46) = 47.0
     assert points["qualifying"] == 47.0
     # Race: 0.5 * P3(94) + 0.5 * P4(91) = 92.5
     assert points["race"] == 92.5
+    # Sprint: 0.5 * P3(6) + 0.5 * P4(5) = 5.5
+    assert points["sprint"] == 5.5
 
     # STR: Mixed probabilities
-    points = calculator.calculate_driver_points("STR")
+    points = calculator.calculate_driver_points("STR", format=RaceFormat.SPRINT)
     # Qualifying: 0.5 * P4(44) + 0.5 * P5(42) = 43.0
     assert points["qualifying"] == 43.0
     # Race: 0.5 * P4(91) + 0.5 * P5(88) = 89.5
     assert points["race"] == 89.5
+    # Sprint: P9/P10 = 0 points (only top 8 score)
+    assert points["sprint"] == 0.0
 
 
 def test_overtake_points(calculator):
