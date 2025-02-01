@@ -166,8 +166,10 @@ class ExpectedPointsCalculator:
         float
             Expected overtake points
         """
-        joint_probs: JointProbabilities = self.distributions.get_joint_probabilities(
-            driver_id, "qualifying", "race"
+        joint_probs: JointProbabilities = (
+            self.distributions.get_driver_session_correlation(
+                driver_id, "qualifying", "race"
+            )
         )
         multiplier = self.scorer.tables.overtake_multiplier
 
