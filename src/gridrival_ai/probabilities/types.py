@@ -19,6 +19,10 @@ Examples
 >>> session_dist = SessionProbabilities(probabilities=probs)
 >>> session_dist[1]  # Returns 0.6
 >>> session_dist[2]  # Returns 0.4
+>>> for pos, prob in session_dist.items():
+...     print(f"P{pos}: {prob:.1f}")
+P1: 0.6
+P2: 0.4
 
 >>> # Create a joint distribution
 >>> joint_probs = {(1, 1): 0.4, (1, 2): 0.2, (2, 1): 0.1, (2, 2): 0.3}
@@ -28,10 +32,16 @@ Examples
 ...     probabilities=joint_probs
 ... )
 >>> joint_dist[(1, 1)]  # Returns 0.4
+>>> for (pos1, pos2), prob in joint_dist.items():
+...     print(f"{session1}P{pos1}-{session2}P{pos2}: {prob:.1f}")
+qualifyingP1-raceP1: 0.4
+qualifyingP1-raceP2: 0.2
+qualifyingP2-raceP1: 0.1
+qualifyingP2-raceP2: 0.3
 """
 
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, ItemsView, Tuple
 
 import numpy as np
 
@@ -63,6 +73,10 @@ class SessionProbabilities:
     >>> probs = SessionProbabilities({1: 0.6, 2: 0.4})
     >>> probs[1]  # Returns 0.6
     >>> probs[2]  # Returns 0.4
+    >>> for pos, prob in probs.items():
+    ...     print(f"P{pos}: {prob:.1f}")
+    P1: 0.6
+    P2: 0.4
     """
 
     probabilities: Dict[int, float]
@@ -103,6 +117,24 @@ class SessionProbabilities:
         """
         return self.probabilities[position]
 
+    def items(self) -> ItemsView[int, float]:
+        """Get items view of position-probability pairs.
+
+        Returns
+        -------
+        ItemsView[int, float]
+            View of (position, probability) pairs
+
+        Examples
+        --------
+        >>> probs = SessionProbabilities({1: 0.6, 2: 0.4})
+        >>> for pos, prob in probs.items():
+        ...     print(f"P{pos}: {prob:.1f}")
+        P1: 0.6
+        P2: 0.4
+        """
+        return self.probabilities.items()
+
 
 @dataclass(frozen=True)
 class JointProbabilities:
@@ -127,6 +159,12 @@ class JointProbabilities:
     >>> joint_probs = {(1, 1): 0.4, (1, 2): 0.2, (2, 1): 0.1, (2, 2): 0.3}
     >>> dist = JointProbabilities("qualifying", "race", joint_probs)
     >>> dist[(1, 1)]  # Returns 0.4
+    >>> for (pos1, pos2), prob in dist.items():
+    ...     print(f"{dist.session1}P{pos1}-{dist.session2}P{pos2}: {prob:.1f}")
+    qualifyingP1-raceP1: 0.4
+    qualifyingP1-raceP2: 0.2
+    qualifyingP2-raceP1: 0.1
+    qualifyingP2-raceP2: 0.3
     """
 
     session1: str
@@ -180,3 +218,24 @@ class JointProbabilities:
             If position pair not in distribution
         """
         return self.probabilities[positions]
+
+    def items(self) -> ItemsView[Tuple[int, int], float]:
+        """Get items view of position pairs and their probabilities.
+
+        Returns
+        -------
+        ItemsView[Tuple[int, int], float]
+            View of ((position1, position2), probability) pairs
+
+        Examples
+        --------
+        >>> joint_probs = {(1, 1): 0.4, (1, 2): 0.2, (2, 1): 0.1, (2, 2): 0.3}
+        >>> dist = JointProbabilities("qualifying", "race", joint_probs)
+        >>> for (pos1, pos2), prob in dist.items():
+        ...     print(f"{dist.session1}P{pos1}-{dist.session2}P{pos2}: {prob:.1f}")
+        qualifyingP1-raceP1: 0.4
+        qualifyingP1-raceP2: 0.2
+        qualifyingP2-raceP1: 0.1
+        qualifyingP2-raceP2: 0.3
+        """
+        return self.probabilities.items()

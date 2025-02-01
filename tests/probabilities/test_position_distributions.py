@@ -87,13 +87,8 @@ def test_from_session_probabilities(simple_probabilities):
     )
 
     assert 1 in dist.driver_distributions
-    assert (
-        dist.get_session_probabilities(1, "qualifying")
-        == simple_probabilities
-    )
-    assert (
-        dist.get_session_probabilities(1, "race") == simple_probabilities
-    )
+    assert dist.get_session_probabilities(1, "qualifying") == simple_probabilities
+    assert dist.get_session_probabilities(1, "race") == simple_probabilities
 
 
 def test_get_completion_probability(simple_probabilities, position_distributions):

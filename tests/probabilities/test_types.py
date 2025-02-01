@@ -59,3 +59,38 @@ def test_joint_probabilities_validation():
             session2="race",
             probabilities={(0, 1): 0.5, (1, 1): 0.5},
         )
+
+
+def test_session_probabilities_items():
+    """Test items() method of SessionProbabilities returns correct key-value pairs."""
+    probs = {1: 0.6, 2: 0.4}
+    dist = SessionProbabilities(probabilities=probs)
+
+    items = list(dist.items())
+
+    assert len(items) == 2
+    assert (1, 0.6) in items
+    assert (2, 0.4) in items
+
+
+def test_joint_probabilities_items():
+    """Test items() method of JointProbabilities returns correct key-value pairs."""
+    joint_probs = {
+        (1, 1): 0.4,
+        (1, 2): 0.2,
+        (2, 1): 0.1,
+        (2, 2): 0.3,
+    }
+    dist = JointProbabilities(
+        session1="qualifying",
+        session2="race",
+        probabilities=joint_probs,
+    )
+
+    items = list(dist.items())
+
+    assert len(items) == 4
+    assert ((1, 1), 0.4) in items
+    assert ((1, 2), 0.2) in items
+    assert ((2, 1), 0.1) in items
+    assert ((2, 2), 0.3) in items
