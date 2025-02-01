@@ -194,26 +194,29 @@ class ExpectedPointsCalculator:
         -------
         float
             Expected teammate points
+
+        Notes
+        -----
+        Uses joint distribution between teammates that enforces the constraint
+        that two drivers cannot finish in the same position.
         """
-        # Get race probabilities for both drivers
-        driver_probs = self.distributions.get_session_probabilities(driver_id, "race")
-        teammate_probs = self.distributions.get_session_probabilities(
-            teammate_id, "race"
+        # Get joint race probabilities for driver and teammate
+        joint_probs = self.distributions.get_driver_pair_distribution(
+            driver_id, teammate_id, session="race"
         )
 
-        # Calculate probability of each position difference
+        # Calculate points based on position differences
         total_points = 0.0
         thresholds = self.scorer.tables.teammate_thresholds
 
-        for d_pos, d_prob in driver_probs.items():
-            for t_pos, t_prob in teammate_probs.items():
-                if d_pos < t_pos:  # Only if beating teammate
-                    margin = t_pos - d_pos
-                    # Find applicable threshold (first one not exceeded)
-                    idx = np.searchsorted(thresholds[:, 0], margin)
-                    if idx < len(thresholds):  # If we found a valid threshold
-                        points = thresholds[idx, 1]
-                        total_points += d_prob * t_prob * points
+        for (d_pos, t_pos), prob in joint_probs.items():
+            if d_pos < t_pos:  # Only if beating teammate
+                margin = t_pos - d_pos
+                # Find applicable threshold (first one not exceeded)
+                idx = np.searchsorted(thresholds[:, 0], margin)
+                if idx < len(thresholds):  # If we found a valid threshold
+                    points = thresholds[idx, 1]
+                    total_points += prob * points
 
         return total_points
 

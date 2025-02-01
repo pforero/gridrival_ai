@@ -188,21 +188,30 @@ def test_overtake_points(calculator):
 
 
 def test_teammate_points(calculator):
-    """Test calculation of teammate points."""
+    """Test calculation of teammate points.
+
+    Tests the teammate points calculation using the joint distribution that
+    enforces the constraint that teammates cannot finish in the same position.
+    """
     # VER vs LAW
     points_ver = calculator.calculate_driver_points("VER")
     points_law = calculator.calculate_driver_points("LAW")
-    # VER: P1 vs LAW: P2 = 1 position ahead
+    # VER: Always P1, LAW: Always P2
+    # Since they can't finish in same position, this is deterministic
     assert points_ver["teammate"] == 2.0  # 1-3 positions bracket
     assert points_law["teammate"] == 0.0  # Behind teammate
 
     # ALO vs STR
     points_alo = calculator.calculate_driver_points("ALO")
     points_str = calculator.calculate_driver_points("STR")
-    # ALO avg: (2.5 quali + 3.5 race) / 2 = 3.0
-    # STR avg: (4.5 quali + 4.5 race) / 2 = 4.5
-    # Difference: 1.5 positions
-    assert points_alo["teammate"] == 1.5  # Expected value based on position difference
+    # ALO: 50% P3, 50% P4
+    # STR: 50% P4, 50% P5
+    # After enforcing no-same-position constraint and renormalizing:
+    # P(ALO=3, STR=4) = 0.5 * 0.5 / 0.75 = 1/3  -> +2 points
+    # P(ALO=3, STR=5) = 0.5 * 0.5 / 0.75 = 1/3  -> +2 points
+    # P(ALO=4, STR=5) = 0.5 * 0.5 / 0.75 = 1/3  -> +2 points
+    # Expected points = 2.0
+    assert points_alo["teammate"] == 2.0
     assert points_str["teammate"] == 0.0  # Behind teammate
 
 
