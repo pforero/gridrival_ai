@@ -23,7 +23,7 @@ def test_driver_stats_creation():
     valid_averages = {
         "VER": 1.5,
         "HAM": 3.2,
-        "PER": 4.8,
+        "ALO": 4.8,
         "LEC": 5.1,
     }
     stats = DriverStats(rolling_averages=valid_averages)
@@ -57,7 +57,7 @@ def test_driver_stats_edge_cases():
     edge_averages = {
         "VER": 1.0,  # minimum valid value
         "HAM": 20.0,  # maximum valid value
-        "PER": 10.5,  # middle value
+        "ALO": 10.5,  # middle value
     }
     stats = DriverStats(rolling_averages=edge_averages)
     assert stats.rolling_averages == edge_averages
