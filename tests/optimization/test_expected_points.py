@@ -216,7 +216,20 @@ def test_teammate_points(calculator):
 
 
 def test_completion_points(calculator):
-    """Test calculation of completion points."""
+    """Test calculation of completion points.
+
+    The test verifies the new completion points calculation that assumes DNFs
+    occur uniformly across race laps. For a driver with completion probability p,
+    the (1-p) probability of DNF is distributed uniformly across race distance.
+
+    Using thresholds [0.25, 0.5, 0.75, 0.9]:
+    - DNF before 0.25: 0 points (25% of DNF cases)
+    - DNF between 0.25-0.5: 3 points (25% of DNF cases)
+    - DNF between 0.5-0.75: 6 points (25% of DNF cases)
+    - DNF between 0.75-0.9: 9 points (15% of DNF cases)
+    - DNF between 0.9-1.0: 12 points (10% of DNF cases)
+    - Complete race (no DNF): 12 points
+    """
     # VER: 100% completion probability
     points = calculator.calculate_driver_points("VER")
     # All stages completed with certainty
@@ -224,22 +237,29 @@ def test_completion_points(calculator):
 
     # LAW: 95% completion probability
     points = calculator.calculate_driver_points("LAW")
-    # Probability compounds for each stage:
-    # Stage 1: 0.95 * 3 = 2.85
-    # Stage 2: 0.95² * 3 = 2.71
-    # Stage 3: 0.95³ * 3 = 2.57
-    # Stage 4: 0.95⁴ * 3 = 2.44
-    expected_law = 2.85 + 2.71 + 2.57 + 2.44  # ≈ 10.57
+    # 95% chance of completing race: 0.95 * 12 = 11.4
+    # 5% chance of DNF distributed across thresholds:
+    # - 0.25 * 0.05 * 0 = 0.0 (DNF before 0.25)
+    # - 0.25 * 0.05 * 3 = 0.0375 (DNF between 0.25-0.5)
+    # - 0.25 * 0.05 * 6 = 0.075 (DNF between 0.5-0.75)
+    # - 0.15 * 0.05 * 9 = 0.0675 (DNF between 0.75-0.9)
+    # - 0.10 * 0.05 * 12 = 0.06 (DNF between 0.9-1.0)
+    # Total = 11.4 + 0.0 + 0.0375 + 0.075 + 0.0675 + 0.06 = 11.64
+    expected_law = 11.64
     assert abs(points["completion"] - expected_law) < 0.01
 
     # ALO: 90% completion probability
     points = calculator.calculate_driver_points("ALO")
-    # Stage 1: 0.90 * 3 = 2.70
-    # Stage 2: 0.90² * 3 = 2.43
-    # Stage 3: 0.90³ * 3 = 2.19
-    # Stage 4: 0.90⁴ * 3 = 1.97
-    expected_alo = 2.70 + 2.43 + 2.19 + 1.97
-    assert abs(points["completion"] - expected_alo) < 0.01  # ≈ 9.29
+    # 90% chance of completing race: 0.9 * 12 = 10.8
+    # 10% chance of DNF distributed across thresholds:
+    # - 0.25 * 0.10 * 0 = 0.0 (DNF before 0.25)
+    # - 0.25 * 0.10 * 3 = 0.075 (DNF between 0.25-0.5)
+    # - 0.25 * 0.10 * 6 = 0.15 (DNF between 0.5-0.75)
+    # - 0.15 * 0.10 * 9 = 0.135 (DNF between 0.75-0.9)
+    # - 0.10 * 0.10 * 12 = 0.12 (DNF between 0.9-1.0)
+    # Total = 10.8 + 0.0 + 0.075 + 0.15 + 0.135 + 0.12 = 11.28
+    expected_alo = 11.28
+    assert abs(points["completion"] - expected_alo) < 0.01
 
     # STR: 90% completion probability (same as ALO)
     points = calculator.calculate_driver_points("STR")

@@ -232,11 +232,53 @@ class ExpectedPointsCalculator:
         -------
         float
             Expected completion points
+
+        Notes
+        -----
+        The calculation assumes that DNFs occur uniformly across race laps.
+        For a driver with completion probability p, the probability (1-p) of DNF
+        is distributed uniformly across the race distance.
+
+        For example, with thresholds [0.25, 0.5, 0.75, 0.9] and points_per_stage=3:
+        - DNF before 0.25: 0 points (25% of DNF cases)
+        - DNF between 0.25-0.5: 3 points (25% of DNF cases)
+        - DNF between 0.5-0.75: 6 points (25% of DNF cases)
+        - DNF between 0.75-0.9: 9 points (15% of DNF cases)
+        - DNF between 0.9-1.0: 12 points (10% of DNF cases)
+        - Complete race (no DNF): 12 points (100% of completion cases)
         """
         completion_prob = self.distributions.get_completion_probability(driver_id)
-        n_stages = len(self.scorer.tables.completion_thresholds)
-        stage_prob = completion_prob ** np.arange(1, n_stages + 1)
-        return np.sum(stage_prob) * self.scorer.tables.stage_points
+        thresholds = self.scorer.tables.completion_thresholds
+        points_per_stage = self.scorer.tables.stage_points
+        max_points = points_per_stage * len(thresholds)
+
+        # Handle edge cases
+        if completion_prob == 0.0:
+            return 0.0
+        if completion_prob == 1.0:
+            return max_points
+
+        # Points for completing the race
+        total_points = completion_prob * max_points
+
+        # Points for DNF cases
+        dnf_prob = 1 - completion_prob
+        prev_threshold = 0.0
+
+        # For each threshold, calculate points if DNF occurs before reaching it
+        for i, threshold in enumerate(thresholds):
+            # Probability of DNF in this interval
+            interval_prob = (threshold - prev_threshold) * dnf_prob
+            # Points for completing all previous stages
+            points = i * points_per_stage
+            total_points += interval_prob * points
+            prev_threshold = threshold
+
+        # Points for DNF after last threshold (all stages completed)
+        last_interval_prob = (1.0 - prev_threshold) * dnf_prob
+        total_points += last_interval_prob * max_points
+
+        return total_points
 
     def _calculate_improvement_points(self, driver_id: DriverId) -> float:
         """Calculate expected improvement points vs rolling average.
