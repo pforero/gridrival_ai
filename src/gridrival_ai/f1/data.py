@@ -1,12 +1,12 @@
-"""2025 F1 season data."""
+"""F1 season data."""
 
 from typing import Dict, List, Literal
 
 from gridrival_ai.f1.core import Constructor, Pilot, Race
 
-# List of all drivers for 2025 season
+# List of all drivers
 # Each tuple contains (driver_id, full name)
-DRIVERS_2025: List[tuple[str, str]] = [
+DRIVER_LIST: List[tuple[str, str]] = [
     ("VER", "Max Verstappen"),
     ("LAW", "Liam Lawson"),
     ("RUS", "George Russell"),
@@ -29,9 +29,9 @@ DRIVERS_2025: List[tuple[str, str]] = [
     ("BEA", "Oliver Bearman"),
 ]
 
-# List of all constructors for 2025 season
+# List of all constructors
 # Each tuple contains (constructor_id, full name, (driver1_id, driver2_id))
-CONSTRUCTORS_LIST_2025: List[tuple[str, str, tuple[str, str]]] = [
+CONSTRUCTOR_LIST: List[tuple[str, str, tuple[str, str]]] = [
     ("RBR", "Red Bull Racing", ("VER", "LAW")),
     ("MER", "Mercedes", ("RUS", "ANT")),
     ("FER", "Ferrari", ("LEC", "HAM")),
@@ -44,32 +44,8 @@ CONSTRUCTORS_LIST_2025: List[tuple[str, str, tuple[str, str]]] = [
     ("HAA", "Haas", ("OCO", "BEA")),
 ]
 
-# Explicit string literals for driver IDs
-DriverId = Literal[
-    "VER", "LAW", "RUS", "ANT", "LEC", "HAM", "NOR", "PIA", "ALO", "STR",
-    "GAS", "DOO", "ALB", "SAI", "TSU", "HAD", "HUL", "BOR", "OCO", "BEA"
-]
-
-# Explicit string literals for constructor IDs
-ConstructorId = Literal[
-    "RBR", "MER", "FER", "MCL", "AST", "ALP", "WIL", "RBU", "SAU", "HAA"
-]
-
-# Create pilots dictionary dynamically
-PILOTS_2025: Dict[str, Pilot] = {
-    driver_id: Pilot(driver_id=driver_id, name=name) for driver_id, name in DRIVERS_2025
-}
-
-# Create constructors dictionary dynamically
-CONSTRUCTORS_2025: Dict[str, Constructor] = {
-    constructor_id: Constructor(
-        constructor_id=constructor_id, name=name, drivers=drivers
-    )
-    for constructor_id, name, drivers in CONSTRUCTORS_LIST_2025
-}
-
-# Create all races
-RACES_2025 = [
+# List of all races
+RACE_LIST = [
     Race("Australia", False),
     Race("China", True),
     Race("Japan", False),
@@ -96,8 +72,52 @@ RACES_2025 = [
     Race("Abu Dhabi", False),
 ]
 
-# For runtime validation
-VALID_DRIVER_IDS: set[str] = {driver[0] for driver in DRIVERS_2025}
-VALID_CONSTRUCTOR_IDS: set[str] = {
-    constructor[0] for constructor in CONSTRUCTORS_LIST_2025
+# Explicit string literals for IDs
+DriverId = Literal[
+    "VER",
+    "LAW",
+    "RUS",
+    "ANT",
+    "LEC",
+    "HAM",
+    "NOR",
+    "PIA",
+    "ALO",
+    "STR",
+    "GAS",
+    "DOO",
+    "ALB",
+    "SAI",
+    "TSU",
+    "HAD",
+    "HUL",
+    "BOR",
+    "OCO",
+    "BEA",
+]
+
+ConstructorId = Literal[
+    "RBR", "MER", "FER", "MCL", "AST", "ALP", "WIL", "RBU", "SAU", "HAA"
+]
+
+# Dictionary mappings
+PILOTS: Dict[str, Pilot] = {
+    driver_id: Pilot(driver_id=driver_id, name=name) for driver_id, name in DRIVER_LIST
 }
+
+CONSTRUCTORS: Dict[str, Constructor] = {
+    constructor_id: Constructor(
+        constructor_id=constructor_id, name=name, drivers=drivers
+    )
+    for constructor_id, name, drivers in CONSTRUCTOR_LIST
+}
+
+DRIVER_TO_CONSTRUCTOR: Dict[str, Constructor] = {
+    driver_id: constructor
+    for constructor in CONSTRUCTORS.values()
+    for driver_id in constructor.drivers
+}
+
+# Validation sets
+VALID_DRIVER_IDS: set[str] = {driver[0] for driver in DRIVER_LIST}
+VALID_CONSTRUCTOR_IDS: set[str] = {constructor[0] for constructor in CONSTRUCTOR_LIST}
