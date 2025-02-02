@@ -1,11 +1,14 @@
-"""Core classes for F1 data structures."""
+"""Core F1 data models.
+
+This module contains the core data models used to represent F1-related entities.
+"""
 
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class Pilot:
-    """F1 pilot representation.
+class Driver:
+    """F1 driver representation.
 
     Parameters
     ----------
@@ -66,7 +69,6 @@ class Constructor:
             raise ValueError("Constructor ID must be uppercase")
         if len(self.drivers) != 2:
             raise ValueError("Constructor must have exactly 2 drivers")
-        # Validate driver IDs
         for driver_id in self.drivers:
             if len(driver_id) != 3:
                 raise ValueError("Driver ID must be exactly 3 letters")
@@ -89,9 +91,9 @@ class Race:
     """
 
     name: str
-    is_sprint: bool
+    is_sprint: bool = False
 
     def __post_init__(self) -> None:
-        """Validate the race name."""
+        """Validate the race data."""
         if not self.name:
             raise ValueError("Race name cannot be empty")

@@ -1,24 +1,24 @@
-"""Tests for core F1 data structures."""
+"""Tests for core F1 data models."""
 
 import pytest
 
-from gridrival_ai.f1.core import Constructor, Pilot, Race
+from gridrival_ai.data.models import Constructor, Driver, Race
 
 
-def test_pilot_creation():
-    """Test basic pilot creation and validation."""
-    # Valid pilot
-    pilot = Pilot(driver_id="VER", name="Max Verstappen")
-    assert pilot.driver_id == "VER"
-    assert pilot.name == "Max Verstappen"
+def test_driver_creation():
+    """Test basic driver creation and validation."""
+    # Valid driver
+    driver = Driver(driver_id="VER", name="Max Verstappen")
+    assert driver.driver_id == "VER"
+    assert driver.name == "Max Verstappen"
 
     # Invalid driver_id length
     with pytest.raises(ValueError, match="must be exactly 3 letters"):
-        Pilot(driver_id="VERST", name="Max Verstappen")
+        Driver(driver_id="VERST", name="Max Verstappen")
 
     # Invalid driver_id characters
     with pytest.raises(ValueError, match="must contain only letters"):
-        Pilot(driver_id="V3R", name="Max Verstappen")
+        Driver(driver_id="V3R", name="Max Verstappen")
 
 
 def test_constructor_creation():

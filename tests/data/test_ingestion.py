@@ -1,12 +1,11 @@
 """Tests for the data ingestion module."""
 
 import io
-from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from gridrival_ai.data_ingestion import load_constructor_data, load_driver_data
+from gridrival_ai.data.ingestion import load_constructor_data, load_driver_data
 
 
 @pytest.fixture

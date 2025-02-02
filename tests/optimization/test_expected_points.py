@@ -2,6 +2,7 @@
 
 import pytest
 
+from gridrival_ai.data.fantasy import RollingAverages
 from gridrival_ai.optimization.expected_points import ExpectedPointsCalculator
 from gridrival_ai.probabilities.driver_distributions import DriverDistribution
 from gridrival_ai.probabilities.position_distribution import PositionDistributions
@@ -9,7 +10,6 @@ from gridrival_ai.probabilities.types import JointProbabilities, SessionProbabil
 from gridrival_ai.scoring.base import ScoringConfig
 from gridrival_ai.scoring.calculator import Scorer
 from gridrival_ai.scoring.types import RaceFormat
-from gridrival_ai.utils.driver_stats import DriverStats
 
 
 @pytest.fixture
@@ -25,14 +25,14 @@ def scorer(scoring_config):
 
 
 @pytest.fixture
-def driver_stats():
-    """Create driver stats for testing."""
-    return DriverStats(
-        rolling_averages={
-            "VER": 1.5,  # Dominant
-            "LAW": 3.0,  # Strong
-            "ALO": 6.0,  # Midfield
-            "STR": 8.0,  # Midfield
+def driver_stats() -> RollingAverages:
+    """Create test driver statistics."""
+    return RollingAverages(
+        values={
+            "VER": 1.5,
+            "LAW": 3.0,
+            "ALO": 6.0,
+            "STR": 8.0,
         }
     )
 
@@ -188,11 +188,7 @@ def test_overtake_points(calculator):
 
 
 def test_teammate_points(calculator):
-    """Test calculation of teammate points.
-
-    Tests the teammate points calculation using the joint distribution that
-    enforces the constraint that teammates cannot finish in the same position.
-    """
+    """Test calculation of teammate points."""
     # VER vs LAW
     points_ver = calculator.calculate_driver_points("VER")
     points_law = calculator.calculate_driver_points("LAW")
@@ -216,20 +212,7 @@ def test_teammate_points(calculator):
 
 
 def test_completion_points(calculator):
-    """Test calculation of completion points.
-
-    The test verifies the new completion points calculation that assumes DNFs
-    occur uniformly across race laps. For a driver with completion probability p,
-    the (1-p) probability of DNF is distributed uniformly across race distance.
-
-    Using thresholds [0.25, 0.5, 0.75, 0.9]:
-    - DNF before 0.25: 0 points (25% of DNF cases)
-    - DNF between 0.25-0.5: 3 points (25% of DNF cases)
-    - DNF between 0.5-0.75: 6 points (25% of DNF cases)
-    - DNF between 0.75-0.9: 9 points (15% of DNF cases)
-    - DNF between 0.9-1.0: 12 points (10% of DNF cases)
-    - Complete race (no DNF): 12 points
-    """
+    """Test calculation of completion points."""
     # VER: 100% completion probability
     points = calculator.calculate_driver_points("VER")
     # All stages completed with certainty

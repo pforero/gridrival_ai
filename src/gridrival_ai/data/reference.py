@@ -1,8 +1,11 @@
-"""F1 season data."""
+"""Static reference data for F1.
 
-from typing import Dict, List, Literal
+This module contains static data about F1 drivers, constructors, and races.
+"""
 
-from gridrival_ai.f1.core import Constructor, Pilot, Race
+from typing import Dict, List, Literal, Optional
+
+from gridrival_ai.data.models import Constructor, Driver, Race
 
 # List of all drivers
 # Each tuple contains (driver_id, full name)
@@ -27,6 +30,30 @@ DRIVER_LIST: List[tuple[str, str]] = [
     ("BOR", "Gabriel Bortoleto"),
     ("OCO", "Esteban Ocon"),
     ("BEA", "Oliver Bearman"),
+]
+
+# Type alias for driver IDs
+DriverId = Literal[
+    "VER",
+    "LAW",
+    "RUS",
+    "ANT",
+    "LEC",
+    "HAM",
+    "NOR",
+    "PIA",
+    "ALO",
+    "STR",
+    "GAS",
+    "DOO",
+    "ALB",
+    "SAI",
+    "TSU",
+    "HAD",
+    "HUL",
+    "BOR",
+    "OCO",
+    "BEA",
 ]
 
 # List of all constructors
@@ -72,42 +99,16 @@ RACE_LIST = [
     Race("Abu Dhabi", False),
 ]
 
-# Explicit string literals for IDs
-DriverId = Literal[
-    "VER",
-    "LAW",
-    "RUS",
-    "ANT",
-    "LEC",
-    "HAM",
-    "NOR",
-    "PIA",
-    "ALO",
-    "STR",
-    "GAS",
-    "DOO",
-    "ALB",
-    "SAI",
-    "TSU",
-    "HAD",
-    "HUL",
-    "BOR",
-    "OCO",
-    "BEA",
-]
-
-ConstructorId = Literal[
-    "RBR", "MER", "FER", "MCL", "AST", "ALP", "WIL", "RBU", "SAU", "HAA"
-]
-
 # Dictionary mappings
-PILOTS: Dict[str, Pilot] = {
-    driver_id: Pilot(driver_id=driver_id, name=name) for driver_id, name in DRIVER_LIST
+DRIVERS: Dict[str, Driver] = {
+    driver_id: Driver(driver_id=driver_id, name=name) for driver_id, name in DRIVER_LIST
 }
 
 CONSTRUCTORS: Dict[str, Constructor] = {
     constructor_id: Constructor(
-        constructor_id=constructor_id, name=name, drivers=drivers
+        constructor_id=constructor_id,
+        name=name,
+        drivers=drivers,
     )
     for constructor_id, name, drivers in CONSTRUCTOR_LIST
 }
@@ -121,3 +122,54 @@ DRIVER_TO_CONSTRUCTOR: Dict[str, Constructor] = {
 # Validation sets
 VALID_DRIVER_IDS: set[str] = {driver[0] for driver in DRIVER_LIST}
 VALID_CONSTRUCTOR_IDS: set[str] = {constructor[0] for constructor in CONSTRUCTOR_LIST}
+
+
+def get_driver(driver_id: str) -> Optional[Driver]:
+    """Get a driver by ID.
+
+    Parameters
+    ----------
+    driver_id : str
+        The driver's ID
+
+    Returns
+    -------
+    Optional[Driver]
+        The driver if found, None otherwise
+    """
+    return DRIVERS.get(driver_id)
+
+
+def get_constructor(driver_id: str) -> Optional[Constructor]:
+    """Get the constructor (team) for a given driver.
+
+    Parameters
+    ----------
+    driver_id : str
+        Three letter driver identifier
+
+    Returns
+    -------
+    Optional[Constructor]
+        The constructor object if driver exists, None otherwise
+    """
+    return DRIVER_TO_CONSTRUCTOR.get(driver_id)
+
+
+def get_teammate(driver_id: str) -> Optional[str]:
+    """Get the teammate's ID for a given driver.
+
+    Parameters
+    ----------
+    driver_id : str
+        Three letter driver identifier
+
+    Returns
+    -------
+    Optional[str]
+        The teammate's driver ID if driver exists, None otherwise
+    """
+    if constructor := DRIVER_TO_CONSTRUCTOR.get(driver_id):
+        driver1, driver2 = constructor.drivers
+        return driver2 if driver1 == driver_id else driver1
+    return None

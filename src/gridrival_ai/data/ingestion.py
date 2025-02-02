@@ -1,5 +1,4 @@
-"""
-Data ingestion module for GridRival AI.
+"""Data ingestion utilities for F1 and fantasy league data.
 
 This module provides functions for loading and validating driver and constructor
 data from CSV files. It ensures data consistency and provides default values
@@ -12,22 +11,21 @@ import pandas as pd
 
 
 def _validate_columns(df: pd.DataFrame, required_cols: Set[str], source: str) -> None:
-    """
-    Validate that all required columns are present in the DataFrame.
+    """Validate that all required columns are present in the DataFrame.
 
     Parameters
     ----------
     df : pd.DataFrame
-        The DataFrame to validate.
+        The DataFrame to validate
     required_cols : Set[str]
-        Set of required column names.
+        Set of required column names
     source : str
-        Source description for error messages (e.g., 'driver' or 'constructor').
+        Source description for error messages (e.g., 'driver' or 'constructor')
 
     Raises
     ------
     ValueError
-        If any required columns are missing.
+        If any required columns are missing
     """
     missing_cols = required_cols - set(df.columns)
     if missing_cols:
@@ -37,13 +35,12 @@ def _validate_columns(df: pd.DataFrame, required_cols: Set[str], source: str) ->
 
 
 def load_driver_data(filepath: str) -> pd.DataFrame:
-    """
-    Load and validate driver data from a CSV file.
+    """Load and validate driver data from a CSV file.
 
     Parameters
     ----------
     filepath : str
-        Path to the CSV file containing driver data.
+        Path to the CSV file containing driver data
 
     Returns
     -------
@@ -58,9 +55,9 @@ def load_driver_data(filepath: str) -> pd.DataFrame:
     Raises
     ------
     ValueError
-        If required columns are missing or data types are invalid.
+        If required columns are missing or data types are invalid
     FileNotFoundError
-        If the specified file does not exist.
+        If the specified file does not exist
     """
     # Define column order explicitly
     required_cols = ["driver_id", "name", "salary"]
@@ -100,13 +97,12 @@ def load_driver_data(filepath: str) -> pd.DataFrame:
 
 
 def load_constructor_data(filepath: str) -> pd.DataFrame:
-    """
-    Load and validate constructor (team) data from a CSV file.
+    """Load and validate constructor (team) data from a CSV file.
 
     Parameters
     ----------
     filepath : str
-        Path to the CSV file containing constructor data.
+        Path to the CSV file containing constructor data
 
     Returns
     -------
@@ -121,9 +117,9 @@ def load_constructor_data(filepath: str) -> pd.DataFrame:
     Raises
     ------
     ValueError
-        If required columns are missing or data types are invalid.
+        If required columns are missing or data types are invalid
     FileNotFoundError
-        If the specified file does not exist.
+        If the specified file does not exist
     """
     # Define column order explicitly
     required_cols = ["constructor_id", "name", "salary"]

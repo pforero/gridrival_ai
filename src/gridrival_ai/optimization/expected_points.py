@@ -10,13 +10,13 @@ from typing import Dict
 
 import numpy as np
 
-from gridrival_ai.f1 import get_teammate
-from gridrival_ai.f1.data import DriverId
+from gridrival_ai.data import get_teammate
+from gridrival_ai.data.fantasy import RollingAverages
+from gridrival_ai.data.reference import DriverId
 from gridrival_ai.probabilities.position_distribution import PositionDistributions
 from gridrival_ai.probabilities.types import JointProbabilities, SessionProbabilities
 from gridrival_ai.scoring.calculator import Scorer
 from gridrival_ai.scoring.types import RaceFormat
-from gridrival_ai.utils.driver_stats import DriverStats
 
 
 class ExpectedPointsCalculator:
@@ -31,13 +31,13 @@ class ExpectedPointsCalculator:
         Container with position probabilities
     scorer : Scorer
         Fantasy points calculator
-    driver_stats : DriverStats
+    driver_stats : RollingAverages
         Historical driver statistics including rolling averages
 
     Notes
     -----
     Results are cached for efficiency using position probabilities as key.
-    Teammate relationships are determined using F1 data module.
+    Teammate relationships are determined using data module.
 
     Examples
     --------
@@ -51,7 +51,7 @@ class ExpectedPointsCalculator:
         self,
         distributions: PositionDistributions,
         scorer: Scorer,
-        driver_stats: DriverStats,
+        driver_stats: RollingAverages,
     ):
         """Initialize calculator with distributions and scoring rules."""
         self.distributions = distributions
@@ -293,7 +293,7 @@ class ExpectedPointsCalculator:
         float
             Expected improvement points
         """
-        rolling_avg = self.driver_stats.rolling_averages[driver_id]
+        rolling_avg = self.driver_stats.values[driver_id]
         race_probs = self.distributions.get_session_probabilities(driver_id, "race")
 
         # Calculate expected improvement points
