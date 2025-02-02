@@ -7,7 +7,7 @@ Key Features
 -----------
 - Supports both sprint and standard race formats
 - Handles locked-in and locked-out driver constraints
-- Talent driver selection (salary <= 18M)
+- Automatic talent driver selection (highest points among eligible drivers)
 - Multiple optimal solutions tracking
 - Progressive combination pruning for efficiency
 
@@ -148,7 +148,9 @@ class TeamOptimizer:
         Uses progressive pruning:
         1. Generate driver combinations
         2. Check budget and constraints
-        3. Try each valid talent driver (if any)
+        3. Select best talent driver(s):
+           - If one driver has highest points, select them
+           - If multiple drivers tie for highest points, try each
         4. Add valid constructors
 
         Combinations are pruned if they:
@@ -192,74 +194,81 @@ class TeamOptimizer:
                 if const_salary > remaining_budget:
                     continue
 
-                # First try with a talent driver if any are eligible
+                # Find best talent driver(s) if any are eligible
                 talent_eligible = [
                     d for d in drivers if self.driver_scores[d].can_be_talent
                 ]
 
-                if talent_eligible:
-                    for talent_id in talent_eligible:
-                        # Calculate total points
-                        points_breakdown = {}
+                if not talent_eligible:
+                    # No eligible talent drivers, generate solution without talent
+                    points_breakdown = {}
+                    total_points = self.constructor_points[const_id]
+                    points_breakdown[const_id] = total_points
 
-                        # Add constructor points
-                        const_points = self.constructor_points[const_id]
-                        points_breakdown[const_id] = const_points
+                    # Add regular driver points
+                    for driver_id in drivers:
+                        driver_points = self.driver_scores[driver_id].regular_points
+                        points_breakdown[driver_id] = driver_points
+                        total_points += driver_points
 
-                        # Add driver points
-                        total_points = const_points
+                    total_cost = base_cost + const_salary
 
-                        for driver_id in drivers:
-                            if driver_id == talent_id:
-                                # Double points for talent driver
-                                driver_points = (
-                                    self.driver_scores[driver_id].regular_points * 2
-                                )
-                            else:
-                                # Regular points
-                                driver_points = self.driver_scores[
-                                    driver_id
-                                ].regular_points
+                    yield TeamSolution(
+                        drivers=drivers,
+                        constructor=const_id,
+                        talent_driver="",
+                        expected_points=total_points,
+                        total_cost=total_cost,
+                        points_breakdown=points_breakdown,
+                    )
+                    continue
 
-                            points_breakdown[driver_id] = driver_points
-                            total_points += driver_points
-
-                        total_cost = base_cost + const_salary
-
-                        yield TeamSolution(
-                            drivers=drivers,
-                            constructor=const_id,
-                            talent_driver=talent_id,
-                            expected_points=total_points,
-                            total_cost=total_cost,
-                            points_breakdown=points_breakdown,
-                        )
-
-                # Then try without a talent driver
-                points_breakdown = {}
-
-                # Add constructor points
-                const_points = self.constructor_points[const_id]
-                points_breakdown[const_id] = const_points
-
-                # Add driver points
-                total_points = const_points
-
-                for driver_id in drivers:
-                    driver_points = self.driver_scores[driver_id].regular_points
-                    points_breakdown[driver_id] = driver_points
-                    total_points += driver_points
-
-                total_cost = base_cost + const_salary
-
-                yield TeamSolution(
-                    drivers=drivers,
-                    constructor=const_id,
-                    talent_driver="",  # No talent driver
-                    expected_points=total_points,
-                    total_cost=total_cost,
-                    points_breakdown=points_breakdown,
+                # Find maximum points among eligible drivers
+                max_points = max(
+                    self.driver_scores[d].regular_points for d in talent_eligible
                 )
+
+                # Get all drivers with maximum points
+                best_talent_drivers = [
+                    d
+                    for d in talent_eligible
+                    if np.isclose(
+                        self.driver_scores[d].regular_points,
+                        max_points,
+                        rtol=1e-6,
+                    )
+                ]
+
+                # Generate solution for each potential talent driver
+                for talent_id in best_talent_drivers:
+                    points_breakdown = {}
+                    total_points = self.constructor_points[const_id]
+                    points_breakdown[const_id] = total_points
+
+                    # Add driver points
+                    for driver_id in drivers:
+                        if driver_id == talent_id:
+                            # Double points for talent driver
+                            driver_points = (
+                                self.driver_scores[driver_id].regular_points * 2
+                            )
+                        else:
+                            # Regular points
+                            driver_points = self.driver_scores[driver_id].regular_points
+
+                        points_breakdown[driver_id] = driver_points
+                        total_points += driver_points
+
+                    total_cost = base_cost + const_salary
+
+                    yield TeamSolution(
+                        drivers=drivers,
+                        constructor=const_id,
+                        talent_driver=talent_id,
+                        expected_points=total_points,
+                        total_cost=total_cost,
+                        points_breakdown=points_breakdown,
+                    )
 
     def optimize(self) -> OptimizationResult:
         """Find optimal team composition.
