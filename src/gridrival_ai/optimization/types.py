@@ -5,7 +5,7 @@ composition under budget and roster constraints.
 """
 
 from dataclasses import dataclass
-from typing import Dict, NamedTuple
+from typing import NamedTuple
 
 
 @dataclass(frozen=True)
@@ -16,7 +16,7 @@ class DriverScoring:
     ----------
     regular_points : float
         Expected points without talent driver bonus
-    points_dict : Dict[str, float]
+    points_dict : dict[str, float]
         Breakdown of points by component
     salary : float
         Driver salary in millions
@@ -30,7 +30,7 @@ class DriverScoring:
     """
 
     regular_points: float
-    points_dict: Dict[str, float]
+    points_dict: dict[str, float]
     salary: float
     can_be_talent: bool
 

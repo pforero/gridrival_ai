@@ -6,7 +6,6 @@ for managing a team of 5 drivers and 1 constructor.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
 
 from gridrival_ai.contracts import Contract
 
@@ -20,9 +19,9 @@ class Team:
     ----------
     bank_balance : float
         Available budget for the team.
-    driver_contracts : List[Contract], optional
+    driver_contracts : list[Contract], optional
         List of current driver contracts, by default empty list.
-    constructor_contract : Optional[Contract], optional
+    constructor_contract : Contract | None, optional
         Current constructor contract, by default None.
     max_drivers : int, optional
         Maximum number of drivers allowed, by default 5.
@@ -31,17 +30,17 @@ class Team:
     ----------
     bank_balance : float
         Current available budget.
-    driver_contracts : List[Contract]
+    driver_contracts : list[Contract]
         List of active driver contracts.
-    constructor_contract : Optional[Contract]
+    constructor_contract : Contract | None
         Current constructor contract.
     max_drivers : int
         Maximum number of drivers allowed.
     """
 
     bank_balance: float
-    driver_contracts: List[Contract] = field(default_factory=list)
-    constructor_contract: Optional[Contract] = None
+    driver_contracts: list[Contract] = field(default_factory=list)
+    constructor_contract: Contract | None = None
     max_drivers: int = 5
 
     def __post_init__(self) -> None:

@@ -5,19 +5,17 @@ data from CSV files. It ensures data consistency and provides default values
 for optional fields.
 """
 
-from typing import List, Set
-
 import pandas as pd
 
 
-def _validate_columns(df: pd.DataFrame, required_cols: Set[str], source: str) -> None:
+def _validate_columns(df: pd.DataFrame, required_cols: set, source: str) -> None:
     """Validate that all required columns are present in the DataFrame.
 
     Parameters
     ----------
     df : pd.DataFrame
         The DataFrame to validate
-    required_cols : Set[str]
+    required_cols : set
         Set of required column names
     source : str
         Source description for error messages (e.g., 'driver' or 'constructor')

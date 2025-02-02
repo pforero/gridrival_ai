@@ -41,7 +41,7 @@ qualifyingP2-raceP2: 0.3
 """
 
 from dataclasses import dataclass
-from typing import Dict, ItemsView, Tuple
+from typing import ItemsView
 
 import numpy as np
 
@@ -79,7 +79,7 @@ class SessionProbabilities:
     P2: 0.4
     """
 
-    probabilities: Dict[int, float]
+    probabilities: dict
 
     def __post_init__(self) -> None:
         """Validate the probability distribution."""
@@ -169,7 +169,7 @@ class JointProbabilities:
 
     session1: str
     session2: str
-    probabilities: Dict[Tuple[int, int], float]
+    probabilities: dict
 
     def __post_init__(self) -> None:
         """Validate the joint distribution."""
@@ -199,7 +199,7 @@ class JointProbabilities:
                 f"Joint probabilities sum to {total} (must sum to 1.0)"
             )
 
-    def __getitem__(self, positions: Tuple[int, int]) -> float:
+    def __getitem__(self, positions: tuple) -> float:
         """Get joint probability for a pair of positions.
 
         Parameters
@@ -219,7 +219,7 @@ class JointProbabilities:
         """
         return self.probabilities[positions]
 
-    def items(self) -> ItemsView[Tuple[int, int], float]:
+    def items(self) -> ItemsView[tuple, float]:
         """Get items view of position pairs and their probabilities.
 
         Returns

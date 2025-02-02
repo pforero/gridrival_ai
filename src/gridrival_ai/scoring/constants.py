@@ -10,16 +10,14 @@ Notes
 All position-based dictionaries use 1-based indexing to match F1 positions.
 """
 
-from typing import Dict
-
 # Default qualifying points (P1-P20)
-DEFAULT_QUALIFYING_POINTS: Dict[int, float] = {i: 52 - (i * 2) for i in range(1, 21)}
+DEFAULT_QUALIFYING_POINTS = {i: 52 - (i * 2) for i in range(1, 21)}
 
 # Default race points (P1-P20)
-DEFAULT_RACE_POINTS: Dict[int, float] = {i: 103 - (i * 3) for i in range(1, 21)}
+DEFAULT_RACE_POINTS = {i: 103 - (i * 3) for i in range(1, 21)}
 
 # Default sprint points (P1-P8 only)
-DEFAULT_SPRINT_POINTS: Dict[int, float] = {
+DEFAULT_SPRINT_POINTS = {
     1: 8,
     2: 7,
     3: 6,
@@ -31,7 +29,7 @@ DEFAULT_SPRINT_POINTS: Dict[int, float] = {
 }
 
 # Default improvement points for positions gained vs 8-race average
-DEFAULT_IMPROVEMENT_POINTS: Dict[int, float] = {
+DEFAULT_IMPROVEMENT_POINTS = {
     1: 2,  # 1 position ahead
     2: 4,  # 2 positions ahead
     3: 6,  # 3 positions ahead
@@ -44,7 +42,7 @@ DEFAULT_IMPROVEMENT_POINTS: Dict[int, float] = {
 }
 
 # Default points for beating teammate by position margin
-DEFAULT_TEAMMATE_POINTS: Dict[int, float] = {
+DEFAULT_TEAMMATE_POINTS = {
     3: 2,  # 1-3 positions ahead
     7: 5,  # 4-7 positions ahead
     12: 8,  # 8-12 positions ahead
@@ -52,26 +50,22 @@ DEFAULT_TEAMMATE_POINTS: Dict[int, float] = {
 }
 
 # Default values for other scoring parameters
-DEFAULT_COMPLETION_STAGE_POINTS: float = 3.0
-DEFAULT_OVERTAKE_MULTIPLIER: float = 3.0
-DEFAULT_MINIMUM_POINTS: float = 650.0
+DEFAULT_COMPLETION_STAGE_POINTS = 3.0
+DEFAULT_OVERTAKE_MULTIPLIER = 3.0
+DEFAULT_MINIMUM_POINTS = 650.0
 
 # Default constructor points (per driver, will be summed)
-DEFAULT_CONSTRUCTOR_QUALIFYING_POINTS: Dict[int, float] = {
-    i: 31 - i for i in range(1, 21)
-}
-DEFAULT_CONSTRUCTOR_RACE_POINTS: Dict[int, float] = {
-    i: 62 - (i * 2) for i in range(1, 21)
-}
+DEFAULT_CONSTRUCTOR_QUALIFYING_POINTS = {i: 31 - i for i in range(1, 21)}
+DEFAULT_CONSTRUCTOR_RACE_POINTS = {i: 62 - (i * 2) for i in range(1, 21)}
 
 # Validation constants
-MIN_POSITION: int = 1
-MAX_POSITION: int = 20
-MAX_SPRINT_POSITION: int = 8
-MIN_POINTS: float = 0.0
-MAX_POINTS: float = 1000.0  # Reasonable upper limit for any single component
-MIN_MULTIPLIER: float = 1.0
-MAX_MULTIPLIER: float = 10.0  # Reasonable upper limit for multipliers
+MIN_POSITION = 1
+MAX_POSITION = 20
+MAX_SPRINT_POSITION = 8
+MIN_POINTS = 0.0
+MAX_POINTS = 1000.0  # Reasonable upper limit for any single component
+MIN_MULTIPLIER = 1.0
+MAX_MULTIPLIER = 10.0  # Reasonable upper limit for multipliers
 
 # Schema for config JSON validation
 CONFIG_SCHEMA = {

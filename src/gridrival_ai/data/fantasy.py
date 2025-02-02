@@ -6,7 +6,6 @@ including driver/constructor salaries, performance metrics, and team constraints
 """
 
 from dataclasses import dataclass
-from typing import Dict, FrozenSet, Set
 
 from gridrival_ai.data.reference import VALID_CONSTRUCTOR_IDS, VALID_DRIVER_IDS
 
@@ -29,8 +28,8 @@ class Salaries:
     >>> salaries = Salaries(driver_salaries, constructor_salaries)
     """
 
-    drivers: Dict[str, float]
-    constructors: Dict[str, float]
+    drivers: dict
+    constructors: dict
 
     def __post_init__(self) -> None:
         """Validate salary data.
@@ -74,7 +73,7 @@ class RollingAverages:
     >>> data = RollingAverages(averages)
     """
 
-    values: Dict[str, float]
+    values: dict
 
     def __post_init__(self) -> None:
         """Validate rolling averages.
@@ -123,8 +122,8 @@ class TeamConstraints:
     ... )
     """
 
-    locked_in: FrozenSet[str]
-    locked_out: FrozenSet[str]
+    locked_in: frozenset
+    locked_out: frozenset
 
     def __post_init__(self) -> None:
         """Validate constraint consistency.
@@ -134,12 +133,6 @@ class TeamConstraints:
         ValueError
             If constraints are invalid or inconsistent
         """
-        # Convert to frozenset if needed
-        if isinstance(self.locked_in, Set):
-            object.__setattr__(self, "locked_in", frozenset(self.locked_in))
-        if isinstance(self.locked_out, Set):
-            object.__setattr__(self, "locked_out", frozenset(self.locked_out))
-
         # Check for overlap between locked_in and locked_out
         overlap = self.locked_in & self.locked_out
         if overlap:
@@ -188,11 +181,11 @@ class FantasyLeagueData:
     @classmethod
     def from_dicts(
         cls,
-        driver_salaries: Dict[str, float],
-        constructor_salaries: Dict[str, float],
-        rolling_averages: Dict[str, float],
-        locked_in: Set[str] | None = None,
-        locked_out: Set[str] | None = None,
+        driver_salaries: dict,
+        constructor_salaries: dict,
+        rolling_averages: dict,
+        locked_in: frozenset | None = None,
+        locked_out: frozenset | None = None,
     ) -> "FantasyLeagueData":
         """Create from dictionary inputs.
 
@@ -233,7 +226,7 @@ class FantasyLeagueData:
             ),
         )
 
-    def get_available_drivers(self) -> Set[str]:
+    def get_available_drivers(self) -> frozenset:
         """Get IDs of drivers available for selection.
 
         Returns
@@ -248,9 +241,9 @@ class FantasyLeagueData:
         >>> "VER" in available
         True
         """
-        return set(self.salaries.drivers) - self.constraints.locked_out
+        return frozenset(self.salaries.drivers) - self.constraints.locked_out
 
-    def get_available_constructors(self) -> Set[str]:
+    def get_available_constructors(self) -> frozenset:
         """Get IDs of constructors available for selection.
 
         Returns
@@ -265,4 +258,4 @@ class FantasyLeagueData:
         >>> "RBR" in available
         True
         """
-        return set(self.salaries.constructors) - self.constraints.locked_out
+        return frozenset(self.salaries.constructors) - self.constraints.locked_out

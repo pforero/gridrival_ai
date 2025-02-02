@@ -1,6 +1,6 @@
 """Tests for F1 fantasy scoring calculator."""
 
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 import pytest
@@ -104,7 +104,7 @@ def sprint_constructor_data() -> ConstructorWeekendData:
     )
 
 
-def create_driver_batch_data(scenarios: list[Dict[str, Any]]) -> np.ndarray:
+def create_driver_batch_data(scenarios: list[dict]) -> np.ndarray:
     """Create batch data array from list of driver scenarios."""
     return np.array(
         [
@@ -123,7 +123,7 @@ def create_driver_batch_data(scenarios: list[Dict[str, Any]]) -> np.ndarray:
     )
 
 
-def create_constructor_batch_data(scenarios: list[Dict[str, Any]]) -> np.ndarray:
+def create_constructor_batch_data(scenarios: list[dict]) -> np.ndarray:
     """Create batch data array from list of constructor scenarios."""
     return np.array(
         [

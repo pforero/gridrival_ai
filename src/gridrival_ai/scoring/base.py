@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict
 
 import jsonschema
 
@@ -63,29 +62,29 @@ class ScoringConfig:
     """
 
     # Driver scoring
-    qualifying_points: Dict[int, float] = field(
+    qualifying_points: dict = field(
         default_factory=lambda: DEFAULT_QUALIFYING_POINTS
     )
-    race_points: Dict[int, float] = field(default_factory=lambda: DEFAULT_RACE_POINTS)
-    sprint_points: Dict[int, float] = field(
+    race_points: dict = field(default_factory=lambda: DEFAULT_RACE_POINTS)
+    sprint_points: dict = field(
         default_factory=lambda: DEFAULT_SPRINT_POINTS
     )
 
     # Constructor scoring
-    constructor_qualifying_points: Dict[int, float] = field(
+    constructor_qualifying_points: dict = field(
         default_factory=lambda: DEFAULT_CONSTRUCTOR_QUALIFYING_POINTS
     )
-    constructor_race_points: Dict[int, float] = field(
+    constructor_race_points: dict = field(
         default_factory=lambda: DEFAULT_CONSTRUCTOR_RACE_POINTS
     )
 
     # Additional scoring components
     completion_stage_points: float = DEFAULT_COMPLETION_STAGE_POINTS
     overtake_multiplier: float = DEFAULT_OVERTAKE_MULTIPLIER
-    improvement_points: Dict[int, float] = field(
+    improvement_points: dict = field(
         default_factory=lambda: DEFAULT_IMPROVEMENT_POINTS
     )
-    teammate_points: Dict[int, float] = field(
+    teammate_points: dict = field(
         default_factory=lambda: DEFAULT_TEAMMATE_POINTS
     )
 
@@ -127,7 +126,7 @@ class ScoringConfig:
 
     def _validate_positions(
         self,
-        points: Dict[int, float],
+        points: dict,
         name: str,
         max_pos: int,
         required: bool = True,
@@ -224,7 +223,7 @@ class ScoringConfig:
         return cls(**data)
 
     @staticmethod
-    def _convert_position_keys(data: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_position_keys(data: dict) -> dict:
         """Convert position keys from strings to integers.
 
         Parameters
@@ -272,7 +271,7 @@ class ScoringConfig:
         except Exception as e:
             raise ConfigurationError(f"Failed to save config: {e}") from e
 
-    def _to_json_dict(self) -> Dict[str, Any]:
+    def _to_json_dict(self) -> dict:
         """Convert configuration to JSON-serializable dictionary.
 
         Returns

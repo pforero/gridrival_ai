@@ -6,7 +6,6 @@ across different sessions for a single driver.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 from gridrival_ai.probabilities.types import (
     DistributionError,
@@ -66,9 +65,9 @@ class DriverDistribution:
     """
 
     race: SessionProbabilities
-    qualifying: Optional[SessionProbabilities] = None
-    sprint: Optional[SessionProbabilities] = None
-    joint_qual_race: Optional[JointProbabilities] = None
+    qualifying: SessionProbabilities | None = None
+    sprint: SessionProbabilities | None = None
+    joint_qual_race: JointProbabilities | None = None
     completion_prob: float = 0.95
 
     def __post_init__(self) -> None:

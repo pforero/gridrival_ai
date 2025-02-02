@@ -23,7 +23,7 @@ Talent drivers double their regular points.
 """
 
 from itertools import combinations
-from typing import Dict, Iterator
+from typing import Iterator
 
 import numpy as np
 
@@ -93,7 +93,7 @@ class TeamOptimizer:
 
         # Pre-calculate expected points
         self.driver_scores: dict[str, DriverScoring] = {}
-        self.constructor_points: dict[str, Dict[str, float]] = {}
+        self.constructor_points: dict[str, dict[str, float]] = {}
         self.constructor_salaries: dict[str, float] = {}
 
         self._precalculate_points()

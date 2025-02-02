@@ -5,7 +5,8 @@ This module provides a high-level interface for accessing driver position
 probabilities across different sessions.
 """
 
-from typing import Dict, Optional, Set, Tuple
+from collections import defaultdict
+from dataclasses import dataclass, field
 
 from gridrival_ai.data.reference import CONSTRUCTORS
 from gridrival_ai.probabilities.driver_distributions import DriverDistribution
@@ -21,7 +22,7 @@ class PositionDistributions:
 
     Parameters
     ----------
-    driver_distributions : Dict[str, DriverDistribution]
+    driver_distributions : dict[str, DriverDistribution]
         Mapping of driver three-letter codes to their probability distributions
 
     Notes
@@ -43,22 +44,23 @@ class PositionDistributions:
 
     VALID_SESSIONS = {"qualifying", "race", "sprint"}
 
-    def __init__(self, driver_distributions: Dict[str, DriverDistribution]):
+    def __init__(self, driver_distributions: dict[str, DriverDistribution]):
         """Initialize with driver distributions."""
         self.driver_distributions = driver_distributions
 
-    def get_constructor_drivers(self, constructor_id: str) -> Optional[Tuple[str, str]]:
-        """Get the driver IDs for a constructor.
+    def get_constructor_drivers(self, constructor_id: str) -> tuple[str, str] | None:
+        """
+        Get the drivers for a constructor.
 
         Parameters
         ----------
         constructor_id : str
-            Constructor three-letter abbreviation
+            Constructor ID to get drivers for.
 
         Returns
         -------
-        Optional[Tuple[str, str]]
-            Tuple of two driver IDs if constructor exists, None otherwise
+        tuple[str, str] | None
+            Tuple of driver IDs if found, None otherwise.
         """
         constructor = CONSTRUCTORS.get(constructor_id)
         return constructor.drivers if constructor else None
@@ -202,12 +204,12 @@ class PositionDistributions:
         """
         return self.driver_distributions[driver_id].completion_prob
 
-    def get_available_sessions(self) -> Set[str]:
+    def get_available_sessions(self) -> set[str]:
         """Get set of available session names.
 
         Returns
         -------
-        Set[str]
+        set[str]
             Names of available sessions
         """
         # All drivers have same sessions due to DriverDistribution defaults

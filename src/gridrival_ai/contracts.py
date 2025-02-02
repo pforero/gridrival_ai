@@ -6,7 +6,6 @@ early release penalties, and one-race-interval rules.
 """
 
 from dataclasses import dataclass
-from typing import Dict
 
 
 @dataclass
@@ -76,7 +75,7 @@ class ContractManager:
     ----------
     early_release_penalty_rate : float
         Rate applied for early contract termination.
-    released_elements : Dict[int, int]
+    released_elements : dict
         Tracks when elements were last released (race number).
     current_race : int
         Current race number in the season.
@@ -84,7 +83,7 @@ class ContractManager:
 
     def __init__(self, early_release_penalty_rate: float = 0.03) -> None:
         self.early_release_penalty_rate = early_release_penalty_rate
-        self.released_elements: Dict[int, int] = {}
+        self.released_elements: dict = {}
         self.current_race = 1
 
     def apply_early_release_penalty(self, contract: Contract) -> float:
