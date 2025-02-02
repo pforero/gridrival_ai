@@ -1,34 +1,40 @@
 """F1 fantasy scoring calculator optimized for Monte Carlo simulations.
 
+This module provides the Scorer class for calculating both driver and constructor
+points in F1 fantasy. It's optimized for Monte Carlo simulations with batch
+processing capabilities.
+
 Performance Characteristics
 -------------------------
 - First calculation includes JIT compilation (~100ms)
 - Subsequent calculations ~1µs per race
-- Batch processing up to 50x faster than individual
+- Batch processing up to 50x faster than individual calculations
 - Thread-safe after JIT compilation
 - Uses ~1KB memory for lookup tables
-
-Notes
------
-For optimal performance:
-- Use batch calculations when possible
-- Reuse calculator instance
-- Run warmup calculation before timing
 """
 
 import numpy as np
 
-from gridrival_ai.scoring._calculator import PointTables, calculate_points, race_dtype
+from gridrival_ai.scoring._calculator import (
+    PointTables,
+    calculate_constructor_points,
+    calculate_driver_points,
+    constructor_dtype,
+    race_dtype,
+)
 from gridrival_ai.scoring.base import ScoringConfig
-from gridrival_ai.scoring.types import RaceWeekendData
+from gridrival_ai.scoring.types import (
+    ConstructorWeekendData,
+    DriverWeekendData,
+)
 
 
 class Scorer:
     """High performance scorer for F1 fantasy points.
 
     This class provides an efficient implementation for calculating F1 fantasy
-    points, optimized for Monte Carlo simulations. It uses JIT compilation,
-    structured arrays, and vectorized operations for maximum performance.
+    points for both drivers and constructors. It's optimized for Monte Carlo
+    simulations using JIT compilation and vectorized operations.
 
     Parameters
     ----------
@@ -37,35 +43,47 @@ class Scorer:
 
     Examples
     --------
+    >>> # Calculate driver points
     >>> scorer = Scorer(config)
-    >>> data = RaceWeekendData(...)
-    >>> points = scorer.calculate(data)
-    >>> points
-    162.0  # Example total points
+    >>> driver_data = DriverWeekendData(...)
+    >>> points = scorer.calculate_driver(driver_data)
+    >>> print(points)
+    162.5
 
-    For batch calculations:
-    >>> data_batch = np.array([...], dtype=race_dtype)
-    >>> points = scorer.calculate_batch(data_batch)
-    >>> points
-    array([162.0, 145.5, ...])
+    >>> # Calculate constructor points
+    >>> constructor_data = ConstructorWeekendData(...)
+    >>> points = scorer.calculate_constructor(constructor_data)
+    >>> print(points)
+    245.0
     """
 
     def __init__(self, config: ScoringConfig):
         """Initialize scorer with pre-computed lookup tables."""
-        # Create combined position points table [type, position]
-        base_points = np.zeros((3, 21))  # qual, race, sprint
+        # Create driver points table [type, position]
+        driver_points = np.zeros((3, 21))  # qual, race, sprint
 
         # Fill qualifying points (type index 0)
         for pos, points in config.qualifying_points.items():
-            base_points[0, pos] = points
+            driver_points[0, pos] = points
 
         # Fill race points (type index 1)
         for pos, points in config.race_points.items():
-            base_points[1, pos] = points
+            driver_points[1, pos] = points
 
         # Fill sprint points (type index 2)
         for pos, points in config.sprint_points.items():
-            base_points[2, pos] = points
+            driver_points[2, pos] = points
+
+        # Create constructor points table [type, position]
+        constructor_points = np.zeros((2, 21))  # qual, race only
+
+        # Fill constructor qualifying points (type index 0)
+        for pos, points in config.constructor_qualifying_points.items():
+            constructor_points[0, pos] = points
+
+        # Fill constructor race points (type index 1)
+        for pos, points in config.constructor_race_points.items():
+            constructor_points[1, pos] = points
 
         # Create improvement points array
         max_improve = max(config.improvement_points.keys())
@@ -83,22 +101,22 @@ class Scorer:
 
         # Create combined tables
         self.tables = PointTables(
-            base_points=base_points,
+            driver_points=driver_points,
+            constructor_points=constructor_points,
             improvement_points=improvement_points,
             teammate_thresholds=teammate_thresholds,
             completion_thresholds=completion_thresholds,
             stage_points=config.completion_stage_points,
             overtake_multiplier=config.overtake_multiplier,
-            talent_multiplier=config.talent_multiplier,
         )
 
-    def convert_to_array(self, data: RaceWeekendData) -> np.ndarray:
-        """Convert RaceWeekendData to structured array format.
+    def convert_to_driver_array(self, data: DriverWeekendData) -> np.ndarray:
+        """Convert DriverWeekendData to structured array format.
 
         Parameters
         ----------
-        data : RaceWeekendData
-            Race weekend data
+        data : DriverWeekendData
+            Driver's race weekend data
 
         Returns
         -------
@@ -120,37 +138,90 @@ class Scorer:
             dtype=race_dtype,
         )
 
-    def calculate_batch(self, data: np.ndarray, is_talent: bool = False) -> np.ndarray:
-        """Calculate points for multiple race scenarios.
+    def convert_to_constructor_array(self, data: ConstructorWeekendData) -> np.ndarray:
+        """Convert ConstructorWeekendData to structured array format.
+
+        Parameters
+        ----------
+        data : ConstructorWeekendData
+            Constructor's race weekend data
+
+        Returns
+        -------
+        np.ndarray
+            Structured array with constructor_dtype
+        """
+        return np.array(
+            [
+                (
+                    data.format.value,
+                    data.positions.driver1_qualifying,
+                    data.positions.driver2_qualifying,
+                    data.positions.driver1_race,
+                    data.positions.driver2_race,
+                )
+            ],
+            dtype=constructor_dtype,
+        )
+
+    def calculate_driver_batch(self, data: np.ndarray) -> np.ndarray:
+        """Calculate driver points for multiple scenarios.
 
         Parameters
         ----------
         data : np.ndarray
             Structured array with race_dtype
-        is_talent : bool, optional
-            Whether calculating for talent driver
 
         Returns
         -------
         np.ndarray
             Array of calculated points
         """
-        return calculate_points(data, self.tables, is_talent)
+        return calculate_driver_points(data, self.tables)
 
-    def calculate(self, data: RaceWeekendData, is_talent: bool = False) -> float:
-        """Calculate points for a single race scenario.
+    def calculate_driver(self, data: DriverWeekendData) -> float:
+        """Calculate points for a single driver scenario.
 
         Parameters
         ----------
-        data : RaceWeekendData
-            Race weekend data
-        is_talent : bool, optional
-            Whether calculating for talent driver
+        data : DriverWeekendData
+            Driver's race weekend data
 
         Returns
         -------
         float
             Calculated points
         """
-        arr_data = self.convert_to_array(data)
-        return float(self.calculate_batch(arr_data, is_talent)[0])
+        arr_data = self.convert_to_driver_array(data)
+        return float(self.calculate_driver_batch(arr_data)[0])
+
+    def calculate_constructor_batch(self, data: np.ndarray) -> np.ndarray:
+        """Calculate constructor points for multiple scenarios.
+
+        Parameters
+        ----------
+        data : np.ndarray
+            Structured array with constructor_dtype
+
+        Returns
+        -------
+        np.ndarray
+            Array of calculated points
+        """
+        return calculate_constructor_points(data, self.tables)
+
+    def calculate_constructor(self, data: ConstructorWeekendData) -> float:
+        """Calculate points for a single constructor scenario.
+
+        Parameters
+        ----------
+        data : ConstructorWeekendData
+            Constructor's race weekend data
+
+        Returns
+        -------
+        float
+            Calculated points
+        """
+        arr_data = self.convert_to_constructor_array(data)
+        return float(self.calculate_constructor_batch(arr_data)[0])

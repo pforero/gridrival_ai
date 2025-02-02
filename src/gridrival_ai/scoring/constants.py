@@ -55,7 +55,14 @@ DEFAULT_TEAMMATE_POINTS: Dict[int, float] = {
 DEFAULT_COMPLETION_STAGE_POINTS: float = 3.0
 DEFAULT_OVERTAKE_MULTIPLIER: float = 3.0
 DEFAULT_MINIMUM_POINTS: float = 650.0
-DEFAULT_TALENT_MULTIPLIER: float = 2.0
+
+# Default constructor points (per driver, will be summed)
+DEFAULT_CONSTRUCTOR_QUALIFYING_POINTS: Dict[int, float] = {
+    i: 31 - i for i in range(1, 21)
+}
+DEFAULT_CONSTRUCTOR_RACE_POINTS: Dict[int, float] = {
+    i: 62 - (i * 2) for i in range(1, 21)
+}
 
 # Validation constants
 MIN_POSITION: int = 1
@@ -119,10 +126,21 @@ CONFIG_SCHEMA = {
             "minimum": MIN_POINTS,
             "maximum": MAX_POINTS,
         },
-        "talent_multiplier": {
-            "type": "number",
-            "minimum": MIN_MULTIPLIER,
-            "maximum": MAX_MULTIPLIER,
+        "constructor_qualifying_points": {
+            "type": "object",
+            "patternProperties": {
+                "^[1-9][0-9]?$": {"type": "number", "minimum": MIN_POINTS}
+            },
+            "minProperties": 1,
+            "maxProperties": MAX_POSITION,
+        },
+        "constructor_race_points": {
+            "type": "object",
+            "patternProperties": {
+                "^[1-9][0-9]?$": {"type": "number", "minimum": MIN_POINTS}
+            },
+            "minProperties": 1,
+            "maxProperties": MAX_POSITION,
         },
     },
     "additionalProperties": False,

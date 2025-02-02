@@ -16,14 +16,14 @@ from gridrival_ai.scoring.types import RaceFormat
 class PointTables(NamedTuple):
     """Combined lookup tables for point calculations.
 
-    Using a NamedTuple provides clear field names while keeping
-    the memory layout optimal for calculations.
-
     Parameters
     ----------
-    base_points : NDArray[np.float64]
-        Combined table for position-based points [type, position]
+    driver_points : NDArray[np.float64]
+        Table for driver position-based points [type, position]
         type indices: 0=qualifying, 1=race, 2=sprint
+    constructor_points : NDArray[np.float64]
+        Table for constructor position-based points [type, position]
+        type indices: 0=qualifying, 1=race
     improvement_points : NDArray[np.float64]
         Points for positions gained vs average
     teammate_thresholds : NDArray[np.float64]
@@ -34,20 +34,18 @@ class PointTables(NamedTuple):
         Points per completed stage
     overtake_multiplier : float
         Points per position gained
-    talent_multiplier : float
-        Multiplier for talent drivers
     """
 
-    base_points: NDArray[np.float64]
+    driver_points: NDArray[np.float64]
+    constructor_points: NDArray[np.float64]
     improvement_points: NDArray[np.float64]
     teammate_thresholds: NDArray[np.float64]
     completion_thresholds: NDArray[np.float64]
     stage_points: float
     overtake_multiplier: float
-    talent_multiplier: float
 
 
-# Define structured dtype for race data
+# Define structured dtype for race data (unchanged)
 race_dtype = np.dtype(
     [
         ("format", "i4"),  # RaceFormat enum value
@@ -60,12 +58,22 @@ race_dtype = np.dtype(
     ]
 )
 
+# New dtype for constructor data
+constructor_dtype = np.dtype(
+    [
+        ("format", "i4"),  # RaceFormat enum value
+        ("qualifying1", "i4"),  # First driver qualifying
+        ("qualifying2", "i4"),  # Second driver qualifying
+        ("race1", "i4"),  # First driver race
+        ("race2", "i4"),  # Second driver race
+    ]
+)
+
 
 @jit(nopython=True)
-def calculate_points(
+def calculate_driver_points(
     data: np.ndarray,  # Structured array with race_dtype
     tables: PointTables,
-    is_talent: bool = False,
 ) -> np.ndarray:
     """JIT-compiled point calculation for multiple race scenarios.
 
@@ -75,8 +83,6 @@ def calculate_points(
         Structured array of race data
     tables : PointTables
         Combined lookup tables
-    is_talent : bool, optional
-        Whether calculating for talent driver
 
     Returns
     -------
@@ -89,13 +95,13 @@ def calculate_points(
     for i in range(n_races):
         # Base points (qualifying, race)
         points[i] = (
-            tables.base_points[0, data[i]["qualifying"]]
-            + tables.base_points[1, data[i]["race"]]  # Qualifying  # Race
+            tables.driver_points[0, data[i]["qualifying"]]
+            + tables.driver_points[1, data[i]["race"]]  # Qualifying  # Race
         )
 
         # Sprint points if applicable
         if data[i]["format"] == RaceFormat.SPRINT.value and data[i]["sprint"] > 0:
-            points[i] += tables.base_points[2, data[i]["sprint"]]
+            points[i] += tables.driver_points[2, data[i]["sprint"]]
 
         # Overtake points
         positions_gained = max(0, data[i]["qualifying"] - data[i]["race"])
@@ -124,8 +130,42 @@ def calculate_points(
         completed_stages = (data[i]["completion"] >= tables.completion_thresholds).sum()
         points[i] += completed_stages * tables.stage_points
 
-    # Apply talent multiplier if needed
-    if is_talent:
-        points *= tables.talent_multiplier
+    return points
+
+
+@jit(nopython=True)
+def calculate_constructor_points(
+    data: np.ndarray,  # Structured array with constructor_dtype
+    tables: PointTables,
+) -> np.ndarray:
+    """JIT-compiled constructor point calculation for multiple scenarios.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Structured array of constructor data
+    tables : PointTables
+        Combined lookup tables
+
+    Returns
+    -------
+    np.ndarray
+        Array of total constructor points for each scenario
+    """
+    n_scenarios = len(data)
+    points = np.zeros(n_scenarios)
+
+    for i in range(n_scenarios):
+        # Qualifying points (sum of both drivers)
+        points[i] = (
+            tables.constructor_points[0, data[i]["qualifying1"]]
+            + tables.constructor_points[0, data[i]["qualifying2"]]
+        )
+
+        # Race points (sum of both drivers)
+        points[i] += (
+            tables.constructor_points[1, data[i]["race1"]]
+            + tables.constructor_points[1, data[i]["race2"]]
+        )
 
     return points

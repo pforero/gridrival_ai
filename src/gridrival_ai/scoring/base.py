@@ -12,13 +12,13 @@ import jsonschema
 from gridrival_ai.scoring.constants import (
     CONFIG_SCHEMA,
     DEFAULT_COMPLETION_STAGE_POINTS,
+    DEFAULT_CONSTRUCTOR_QUALIFYING_POINTS,
+    DEFAULT_CONSTRUCTOR_RACE_POINTS,
     DEFAULT_IMPROVEMENT_POINTS,
-    DEFAULT_MINIMUM_POINTS,
     DEFAULT_OVERTAKE_MULTIPLIER,
     DEFAULT_QUALIFYING_POINTS,
     DEFAULT_RACE_POINTS,
     DEFAULT_SPRINT_POINTS,
-    DEFAULT_TALENT_MULTIPLIER,
     DEFAULT_TEAMMATE_POINTS,
     MAX_MULTIPLIER,
     MAX_POINTS,
@@ -37,11 +37,15 @@ class ScoringConfig:
     Parameters
     ----------
     qualifying_points : Dict[int, float]
-        Points awarded for qualifying positions (1-20)
+        Points awarded for driver qualifying positions (1-20)
     race_points : Dict[int, float]
-        Points awarded for race positions (1-20)
+        Points awarded for driver race positions (1-20)
     sprint_points : Dict[int, float]
-        Points awarded for sprint positions (1-8)
+        Points awarded for driver sprint positions (1-8)
+    constructor_qualifying_points : Dict[int, float]
+        Points awarded for constructor qualifying positions (1-20)
+    constructor_race_points : Dict[int, float]
+        Points awarded for constructor race positions (1-20)
     completion_stage_points : float
         Points awarded per completion stage (25%, 50%, 75%, 90%)
     overtake_multiplier : float
@@ -50,17 +54,15 @@ class ScoringConfig:
         Points for positions gained vs 8-race average
     teammate_points : Dict[int, float]
         Points for beating teammate by position margin
-    minimum_points : float
-        Minimum points awarded per event (default: 650)
-    talent_multiplier : float
-        Multiplier for talent driver points (default: 2.0)
 
     Notes
     -----
     All position-based points use 1-based indexing to match F1 positions.
+    Constructor points are calculated for each driver and summed.
     Configurations can be loaded from JSON files using `from_json`.
     """
 
+    # Driver scoring
     qualifying_points: Dict[int, float] = field(
         default_factory=lambda: DEFAULT_QUALIFYING_POINTS
     )
@@ -68,6 +70,16 @@ class ScoringConfig:
     sprint_points: Dict[int, float] = field(
         default_factory=lambda: DEFAULT_SPRINT_POINTS
     )
+
+    # Constructor scoring
+    constructor_qualifying_points: Dict[int, float] = field(
+        default_factory=lambda: DEFAULT_CONSTRUCTOR_QUALIFYING_POINTS
+    )
+    constructor_race_points: Dict[int, float] = field(
+        default_factory=lambda: DEFAULT_CONSTRUCTOR_RACE_POINTS
+    )
+
+    # Additional scoring components
     completion_stage_points: float = DEFAULT_COMPLETION_STAGE_POINTS
     overtake_multiplier: float = DEFAULT_OVERTAKE_MULTIPLIER
     improvement_points: Dict[int, float] = field(
@@ -76,17 +88,16 @@ class ScoringConfig:
     teammate_points: Dict[int, float] = field(
         default_factory=lambda: DEFAULT_TEAMMATE_POINTS
     )
-    minimum_points: float = DEFAULT_MINIMUM_POINTS
-    talent_multiplier: float = DEFAULT_TALENT_MULTIPLIER
 
     def __post_init__(self) -> None:
         """Validate configuration values."""
-        self._validate_point_mappings()
+        self._validate_driver_points()
+        self._validate_constructor_points()
         self._validate_multipliers()
-        self._validate_point_values()
+        self._validate_additional_points()
 
-    def _validate_point_mappings(self) -> None:
-        """Validate position-based point mappings."""
+    def _validate_driver_points(self) -> None:
+        """Validate driver position-based point mappings."""
         # Validate qualifying points
         self._validate_positions(
             self.qualifying_points, "qualifying_points", MAX_POSITION
@@ -100,20 +111,18 @@ class ScoringConfig:
             self.sprint_points, "sprint_points", MAX_SPRINT_POSITION
         )
 
-        # Validate improvement points
+    def _validate_constructor_points(self) -> None:
+        """Validate constructor position-based point mappings."""
+        # Validate qualifying points
         self._validate_positions(
-            self.improvement_points,
-            "improvement_points",
+            self.constructor_qualifying_points,
+            "constructor_qualifying_points",
             MAX_POSITION,
-            required=False,
         )
 
-        # Validate teammate points
+        # Validate race points
         self._validate_positions(
-            self.teammate_points,
-            "teammate_points",
-            MAX_POSITION,
-            required=False,
+            self.constructor_race_points, "constructor_race_points", MAX_POSITION
         )
 
     def _validate_positions(
@@ -171,23 +180,12 @@ class ScoringConfig:
                 f" and {MAX_MULTIPLIER}"
             )
 
-        if not MIN_MULTIPLIER <= self.talent_multiplier <= MAX_MULTIPLIER:
-            raise ConfigurationError(
-                f"talent_multiplier must be between {MIN_MULTIPLIER}"
-                f" and {MAX_MULTIPLIER}"
-            )
-
-    def _validate_point_values(self) -> None:
-        """Validate point values."""
+    def _validate_additional_points(self) -> None:
+        """Validate additional point values."""
         if not MIN_POINTS <= self.completion_stage_points <= MAX_POINTS:
             raise ConfigurationError(
                 f"completion_stage_points must be between {MIN_POINTS}"
                 f" and {MAX_POINTS}"
-            )
-
-        if not MIN_POINTS <= self.minimum_points <= MAX_POINTS:
-            raise ConfigurationError(
-                f"minimum_points must be between {MIN_POINTS}" f" and {MAX_POINTS}"
             )
 
     @classmethod
@@ -243,6 +241,8 @@ class ScoringConfig:
             "qualifying_points",
             "race_points",
             "sprint_points",
+            "constructor_qualifying_points",
+            "constructor_race_points",
             "improvement_points",
             "teammate_points",
         ]
@@ -280,17 +280,20 @@ class ScoringConfig:
         Dict[str, Any]
             JSON-serializable configuration
         """
-        # Convert all numeric keys to strings for JSON compatibility
         return {
             "qualifying_points": {str(k): v for k, v in self.qualifying_points.items()},
             "race_points": {str(k): v for k, v in self.race_points.items()},
             "sprint_points": {str(k): v for k, v in self.sprint_points.items()},
+            "constructor_qualifying_points": {
+                str(k): v for k, v in self.constructor_qualifying_points.items()
+            },
+            "constructor_race_points": {
+                str(k): v for k, v in self.constructor_race_points.items()
+            },
             "improvement_points": {
                 str(k): v for k, v in self.improvement_points.items()
             },
             "teammate_points": {str(k): v for k, v in self.teammate_points.items()},
             "completion_stage_points": self.completion_stage_points,
             "overtake_multiplier": self.overtake_multiplier,
-            "minimum_points": self.minimum_points,
-            "talent_multiplier": self.talent_multiplier,
         }

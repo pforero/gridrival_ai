@@ -8,11 +8,12 @@ import pytest
 from gridrival_ai.scoring.base import ScoringConfig
 from gridrival_ai.scoring.constants import (
     DEFAULT_COMPLETION_STAGE_POINTS,
-    DEFAULT_MINIMUM_POINTS,
+    DEFAULT_CONSTRUCTOR_QUALIFYING_POINTS,
+    DEFAULT_CONSTRUCTOR_RACE_POINTS,
+    DEFAULT_OVERTAKE_MULTIPLIER,
     DEFAULT_QUALIFYING_POINTS,
     MAX_MULTIPLIER,
     MAX_POINTS,
-    MIN_POINTS,
 )
 from gridrival_ai.scoring.exceptions import ConfigurationError
 
@@ -24,12 +25,12 @@ def valid_config_dict():
         "qualifying_points": {str(i): 52 - (i * 2) for i in range(1, 21)},
         "race_points": {str(i): 103 - (i * 3) for i in range(1, 21)},
         "sprint_points": {str(i): 9 - i for i in range(1, 9)},
+        "constructor_qualifying_points": {str(i): 26 - i for i in range(1, 21)},
+        "constructor_race_points": {str(i): 52 - (i * 2) for i in range(1, 21)},
         "completion_stage_points": 3.0,
         "overtake_multiplier": 3.0,
         "improvement_points": {"1": 2, "2": 4, "3": 6},
         "teammate_points": {"3": 2, "7": 5, "12": 8},
-        "minimum_points": 650.0,
-        "talent_multiplier": 2.0,
     }
 
 
@@ -46,8 +47,10 @@ def test_default_initialization():
     """Test default configuration initialization."""
     config = ScoringConfig()
     assert config.qualifying_points == DEFAULT_QUALIFYING_POINTS
+    assert config.constructor_qualifying_points == DEFAULT_CONSTRUCTOR_QUALIFYING_POINTS
+    assert config.constructor_race_points == DEFAULT_CONSTRUCTOR_RACE_POINTS
     assert config.completion_stage_points == DEFAULT_COMPLETION_STAGE_POINTS
-    assert config.minimum_points == DEFAULT_MINIMUM_POINTS
+    assert config.overtake_multiplier == DEFAULT_OVERTAKE_MULTIPLIER
 
 
 def test_json_loading(config_file):
@@ -56,6 +59,8 @@ def test_json_loading(config_file):
     assert config.qualifying_points[1] == 50
     assert config.race_points[1] == 100
     assert config.sprint_points[1] == 8
+    assert config.constructor_qualifying_points[1] == 25
+    assert config.constructor_race_points[1] == 50
     assert config.completion_stage_points == 3.0
 
 
@@ -74,12 +79,12 @@ def test_invalid_config_format(tmp_path):
         "qualifying_points": {"0": 50},  # Invalid position
         "race_points": {str(i): 103 - (i * 3) for i in range(1, 21)},
         "sprint_points": {str(i): 9 - i for i in range(1, 9)},
+        "constructor_qualifying_points": {str(i): 26 - i for i in range(1, 21)},
+        "constructor_race_points": {str(i): 52 - (i * 2) for i in range(1, 21)},
         "completion_stage_points": 3.0,
         "overtake_multiplier": 3.0,
         "improvement_points": {"1": 2, "2": 4, "3": 6},
         "teammate_points": {"3": 2, "7": 5, "12": 8},
-        "minimum_points": 650.0,
-        "talent_multiplier": 2.0,
     }
 
     with open(config_path, "w") as f:
@@ -107,12 +112,14 @@ def test_json_roundtrip(config_file, tmp_path):
     assert config.qualifying_points == reloaded.qualifying_points
     assert config.race_points == reloaded.race_points
     assert config.sprint_points == reloaded.sprint_points
+    assert (
+        config.constructor_qualifying_points == reloaded.constructor_qualifying_points
+    )
+    assert config.constructor_race_points == reloaded.constructor_race_points
     assert config.completion_stage_points == reloaded.completion_stage_points
     assert config.overtake_multiplier == reloaded.overtake_multiplier
     assert config.improvement_points == reloaded.improvement_points
     assert config.teammate_points == reloaded.teammate_points
-    assert config.minimum_points == reloaded.minimum_points
-    assert config.talent_multiplier == reloaded.talent_multiplier
 
 
 def test_validation_point_values():
@@ -124,13 +131,16 @@ def test_validation_point_values():
     with pytest.raises(ConfigurationError, match="Invalid point values"):
         ScoringConfig(qualifying_points=qualifying_points)
 
+    # Test constructor points with negative value
+    constructor_qualifying_points = {i: 26 - i for i in range(1, 21)}
+    constructor_qualifying_points[1] = -1
+
+    with pytest.raises(ConfigurationError, match="Invalid point values"):
+        ScoringConfig(constructor_qualifying_points=constructor_qualifying_points)
+
     # Test points above maximum
     with pytest.raises(ConfigurationError, match="must be between"):
         ScoringConfig(completion_stage_points=MAX_POINTS + 1)
-
-    # Test minimum points below zero
-    with pytest.raises(ConfigurationError, match="must be between"):
-        ScoringConfig(minimum_points=MIN_POINTS - 1)
 
 
 def test_validation_multipliers():
@@ -141,7 +151,7 @@ def test_validation_multipliers():
 
     # Test multiplier above maximum
     with pytest.raises(ConfigurationError, match="must be between"):
-        ScoringConfig(talent_multiplier=MAX_MULTIPLIER + 1)
+        ScoringConfig(overtake_multiplier=MAX_MULTIPLIER + 1)
 
 
 def test_validation_required_positions():
@@ -153,6 +163,14 @@ def test_validation_required_positions():
     # Missing race positions
     with pytest.raises(ConfigurationError, match="must have points for all positions"):
         ScoringConfig(race_points={1: 100})  # Missing positions 2-20
+
+    # Missing constructor qualifying positions
+    with pytest.raises(ConfigurationError, match="must have points for all positions"):
+        ScoringConfig(constructor_qualifying_points={1: 25})  # Missing positions 2-20
+
+    # Missing constructor race positions
+    with pytest.raises(ConfigurationError, match="must have points for all positions"):
+        ScoringConfig(constructor_race_points={1: 50})  # Missing positions 2-20
 
 
 def test_validation_optional_positions():

@@ -75,14 +75,14 @@ def validate_positive_float(value: float, name: str) -> None:
         raise ValidationError(f"{name} must be positive, got {value}")
 
 
-def validate_format_consistency(format: RaceFormat, positions: Positions) -> None:
+def validate_format_consistency(format: RaceFormat, positions: DriverPositions) -> None:
     """Validate race format matches position data.
 
     Parameters
     ----------
     format : RaceFormat
         Race weekend format
-    positions : Positions
+    positions : DriverPositions
         Position data
 
     Raises
@@ -97,28 +97,15 @@ def validate_format_consistency(format: RaceFormat, positions: Positions) -> Non
 
 
 class RaceFormat(Enum):
-    """Available F1 race weekend formats.
-
-    Attributes
-    ----------
-    STANDARD
-        Traditional format: Practice, Qualifying, Race
-    SPRINT
-        Sprint format: Practice, Qualifying, Sprint, Race
-
-    Notes
-    -----
-    Race scoring differs between formats.
-    Sprint races award fewer points than standard races.
-    """
+    """Available F1 race weekend formats."""
 
     STANDARD = auto()
     SPRINT = auto()
 
 
 @dataclass(frozen=True)
-class Positions:
-    """Position tracking for race weekend.
+class DriverPositions:
+    """Position data for a single driver.
 
     Parameters
     ----------
@@ -128,12 +115,6 @@ class Positions:
         Race finish position (1-20)
     sprint_finish : int | None, optional
         Sprint race position (1-8) for sprint weekends
-
-    Notes
-    -----
-    All positions use 1-based indexing.
-    sprint_finish should only be provided for sprint race weekends.
-    Positions are validated using validate_position().
     """
 
     qualifying: int
@@ -151,14 +132,14 @@ class Positions:
 
 
 @dataclass(frozen=True)
-class RaceWeekendData:
-    """Complete data for a single race weekend.
+class DriverWeekendData:
+    """Complete data for a single driver's race weekend.
 
     Parameters
     ----------
     format : RaceFormat
         Race weekend format (standard/sprint)
-    positions : Positions
+    positions : DriverPositions
         All position data for scoring
     completion_percentage : float
         Percentage of race completed (0.0 to 1.0)
@@ -166,15 +147,10 @@ class RaceWeekendData:
         8-race rolling average finish position (> 0)
     teammate_position : int
         Teammate's race finish position (1-20)
-
-    Notes
-    -----
-    All data is validated using validators.validate_race_weekend().
-    See factory methods for creating common scenarios.
     """
 
     format: RaceFormat
-    positions: Positions
+    positions: DriverPositions
     completion_percentage: float
     rolling_average: float
     teammate_position: int
@@ -182,7 +158,7 @@ class RaceWeekendData:
     def __init__(
         self,
         format: RaceFormat,
-        positions: Positions,
+        positions: DriverPositions,
         completion_percentage: float,
         rolling_average: float,
         teammate_position: int,
@@ -198,98 +174,61 @@ class RaceWeekendData:
         object.__setattr__(self, "rolling_average", rolling_average)
         object.__setattr__(self, "teammate_position", teammate_position)
 
-    @classmethod
-    def perfect_standard_race(cls, rolling_avg: float = 2.0) -> RaceWeekendData:
-        """Create data for perfect standard race (P1 qualifying and race).
 
-        Parameters
-        ----------
-        rolling_avg : float, optional
-            8-race rolling average, by default 2.0
+@dataclass(frozen=True)
+class ConstructorPositions:
+    """Position data for both drivers in a constructor.
 
-        Returns
-        -------
-        RaceWeekendData
-            Perfect race scenario
-        """
-        return cls(
-            format=RaceFormat.STANDARD,
-            positions=Positions(qualifying=1, race=1),
-            completion_percentage=1.0,
-            rolling_average=rolling_avg,
-            teammate_position=2,
-        )
+    Parameters
+    ----------
+    driver1_qualifying : int
+        First driver qualifying position (1-20)
+    driver1_race : int
+        First driver race position (1-20)
+    driver2_qualifying : int
+        Second driver qualifying position (1-20)
+    driver2_race : int
+        Second driver race position (1-20)
+    """
 
-    @classmethod
-    def perfect_sprint_weekend(cls, rolling_avg: float = 2.0) -> RaceWeekendData:
-        """Create data for perfect sprint weekend (P1 in all sessions).
+    driver1_qualifying: int
+    driver1_race: int
+    driver2_qualifying: int
+    driver2_race: int
 
-        Parameters
-        ----------
-        rolling_avg : float, optional
-            8-race rolling average, by default 2.0
+    def __init__(
+        self,
+        driver1_qualifying: int,
+        driver1_race: int,
+        driver2_qualifying: int,
+        driver2_race: int,
+    ):
+        validate_position(driver1_qualifying, "driver1 qualifying")
+        validate_position(driver1_race, "driver1 race")
+        validate_position(driver2_qualifying, "driver2 qualifying")
+        validate_position(driver2_race, "driver2 race")
 
-        Returns
-        -------
-        RaceWeekendData
-            Perfect sprint weekend scenario
-        """
-        return cls(
-            format=RaceFormat.SPRINT,
-            positions=Positions(qualifying=1, race=1, sprint_finish=1),
-            completion_percentage=1.0,
-            rolling_average=rolling_avg,
-            teammate_position=2,
-        )
+        object.__setattr__(self, "driver1_qualifying", driver1_qualifying)
+        object.__setattr__(self, "driver1_race", driver1_race)
+        object.__setattr__(self, "driver2_qualifying", driver2_qualifying)
+        object.__setattr__(self, "driver2_race", driver2_race)
 
-    @classmethod
-    def midfield_performance(
-        cls, position: int = 10, format: RaceFormat = RaceFormat.STANDARD
-    ) -> RaceWeekendData:
-        """Create data for consistent midfield performance.
 
-        Parameters
-        ----------
-        position : int, optional
-            Target position, by default 10
-        format : RaceFormat, optional
-            Race format, by default STANDARD
+@dataclass(frozen=True)
+class ConstructorWeekendData:
+    """Complete data for a constructor's race weekend.
 
-        Returns
-        -------
-        RaceWeekendData
-            Midfield performance scenario
-        """
-        return cls(
-            format=format,
-            positions=Positions(
-                qualifying=position,
-                race=position,
-                sprint_finish=position if format == RaceFormat.SPRINT else None,
-            ),
-            completion_percentage=1.0,
-            rolling_average=float(position),
-            teammate_position=position + 1,
-        )
+    Parameters
+    ----------
+    format : RaceFormat
+        Race weekend format (standard/sprint)
+    positions : ConstructorPositions
+        Position data for both drivers
+    """
 
-    @classmethod
-    def dnf_scenario(cls, qualifying_pos: int = 5) -> RaceWeekendData:
-        """Create data for DNF from points-scoring position.
+    format: RaceFormat
+    positions: ConstructorPositions
 
-        Parameters
-        ----------
-        qualifying_pos : int, optional
-            Qualifying position, by default 5
-
-        Returns
-        -------
-        RaceWeekendData
-            DNF scenario
-        """
-        return cls(
-            format=RaceFormat.STANDARD,
-            positions=Positions(qualifying=qualifying_pos, race=20),
-            completion_percentage=0.5,  # DNF halfway
-            rolling_average=float(qualifying_pos),
-            teammate_position=qualifying_pos + 1,
-        )
+    def __init__(self, format: RaceFormat, positions: ConstructorPositions):
+        object.__setattr__(self, "format", format)
+        object.__setattr__(self, "positions", positions)
