@@ -1,5 +1,6 @@
 """Tests for expected points calculator."""
 
+import numpy as np
 import pytest
 
 from gridrival_ai.data.fantasy import RollingAverages
@@ -85,21 +86,21 @@ def position_distributions(create_distribution):
         "VER": create_distribution(
             qualifying={1: 1.0},
             race={1: 1.0},
-            sprint={1: 1.0},  # Same as race
+            sprint={1: 1.0},
             completion_prob=1.0,
         ),
         # LAW: P3 in qualifying, P2 in race/sprint
         "LAW": create_distribution(
             qualifying={3: 1.0},
             race={2: 1.0},
-            sprint={2: 1.0},  # Same as race
+            sprint={2: 1.0},
             completion_prob=0.95,
         ),
         # ALO: 50% P2 and 50% P3 in qualifying, 50% P3 and 50% P4 in race/sprint
         "ALO": create_distribution(
             qualifying={2: 0.5, 3: 0.5},
             race={3: 0.5, 4: 0.5},
-            sprint={3: 0.5, 4: 0.5},  # Same as race
+            sprint={3: 0.5, 4: 0.5},
             completion_prob=0.90,
         ),
         # STR: 50% P4 and 50% P5 in qualifying, 50% P4 and 50% P5 in race
@@ -107,7 +108,7 @@ def position_distributions(create_distribution):
         "STR": create_distribution(
             qualifying={4: 0.5, 5: 0.5},
             race={4: 0.5, 5: 0.5},
-            sprint={9: 0.5, 10: 0.5},  # Outside points positions
+            sprint={9: 0.5, 10: 0.5},
             completion_prob=0.90,
         ),
     }
@@ -161,6 +162,35 @@ def test_base_points_calculation(calculator):
     assert points["race"] == 89.5
     # Sprint: P9/P10 = 0 points (only top 8 score)
     assert points["sprint"] == 0.0
+
+
+def test_constructor_points_calculation(calculator):
+    """Test calculation of constructor points."""
+    # Test Red Bull (VER: P1, LAW: P3)
+    points = calculator.calculate_constructor_points("RBR", format=RaceFormat.STANDARD)
+    # VER qualifying P1 (30) + LAW qualifying P3 (28) = 58
+    assert points["qualifying"] == 58.0
+    # VER race P1 (60) + LAW race P2 (58) = 118
+    assert points["race"] == 118.0
+
+    # Test sprint format (should be same points as standard)
+    sprint_points = calculator.calculate_constructor_points(
+        "RBR", format=RaceFormat.SPRINT
+    )
+    assert sprint_points == points  # Constructor points don't change in sprint format
+
+    # Test Aston Martin (ALO: P2/P3/P4, STR: P4/P5)
+    points = calculator.calculate_constructor_points("AST", format=RaceFormat.STANDARD)
+    # ALO qualifying: 0.5 * P2(29) + 0.5 * P3(28) = 28.5
+    # STR qualifying: 0.5 * P4(27) + 0.5 * P5(26) = 26.5
+    assert points["qualifying"] == 55.0
+    # ALO race: 0.5 * P3(56) + 0.5 * P4(54) = 55
+    # STR race: 0.5 * P4(54) + 0.5 * P5(52) = 53
+    assert np.isclose(points["race"], 108.0, rtol=1e-6)
+
+    # Test invalid constructor
+    points = calculator.calculate_constructor_points("XXX")
+    assert points == {"qualifying": 0.0, "race": 0.0}
 
 
 def test_overtake_points(calculator):

@@ -23,7 +23,7 @@ Talent drivers double their regular points.
 """
 
 from itertools import combinations
-from typing import Iterator
+from typing import Dict, Iterator
 
 import numpy as np
 
@@ -93,7 +93,7 @@ class TeamOptimizer:
 
         # Pre-calculate expected points
         self.driver_scores: dict[str, DriverScoring] = {}
-        self.constructor_points: dict[str, float] = {}
+        self.constructor_points: dict[str, Dict[str, float]] = {}
         self.constructor_salaries: dict[str, float] = {}
 
         self._precalculate_points()
@@ -117,19 +117,23 @@ class TeamOptimizer:
             can_be_talent = salary <= TALENT_SALARY_THRESHOLD
 
             # Calculate regular points
-            regular = self.points_calculator.calculate_driver_points(
+            points_dict = self.points_calculator.calculate_driver_points(
                 driver_id, format=self.race_format
             )
+            regular = sum(points_dict.values())
 
             self.driver_scores[driver_id] = DriverScoring(
                 regular_points=regular,
+                points_dict=points_dict,
                 salary=salary,
                 can_be_talent=can_be_talent,
             )
 
         # Calculate constructor points
         for const_id in self.league_data.get_available_constructors():
-            points = self.points_calculator.calculate_constructor_points(const_id)
+            points = self.points_calculator.calculate_constructor_points(
+                const_id, format=self.race_format
+            )
             self.constructor_points[const_id] = points
             self.constructor_salaries[const_id] = (
                 self.league_data.salaries.constructors[const_id]
@@ -202,14 +206,14 @@ class TeamOptimizer:
                 if not talent_eligible:
                     # No eligible talent drivers, generate solution without talent
                     points_breakdown = {}
-                    total_points = self.constructor_points[const_id]
-                    points_breakdown[const_id] = total_points
+                    total_points = sum(self.constructor_points[const_id].values())
+                    points_breakdown[const_id] = self.constructor_points[const_id]
 
                     # Add regular driver points
                     for driver_id in drivers:
-                        driver_points = self.driver_scores[driver_id].regular_points
+                        driver_points = self.driver_scores[driver_id].points_dict
                         points_breakdown[driver_id] = driver_points
-                        total_points += driver_points
+                        total_points += sum(driver_points.values())
 
                     total_cost = base_cost + const_salary
 
@@ -242,22 +246,26 @@ class TeamOptimizer:
                 # Generate solution for each potential talent driver
                 for talent_id in best_talent_drivers:
                     points_breakdown = {}
-                    total_points = self.constructor_points[const_id]
+                    total_points = sum(self.constructor_points[const_id].values())
                     points_breakdown[const_id] = total_points
 
                     # Add driver points
                     for driver_id in drivers:
                         if driver_id == talent_id:
                             # Double points for talent driver
-                            driver_points = (
-                                self.driver_scores[driver_id].regular_points * 2
-                            )
+                            driver_points = {
+                                k: v * 2
+                                for k, v in self.driver_scores[
+                                    driver_id
+                                ].points_dict.items()
+                            }
+                            points_breakdown[driver_id] = driver_points
+                            total_points += sum(driver_points.values())
                         else:
                             # Regular points
-                            driver_points = self.driver_scores[driver_id].regular_points
-
-                        points_breakdown[driver_id] = driver_points
-                        total_points += driver_points
+                            driver_points = self.driver_scores[driver_id].points_dict
+                            points_breakdown[driver_id] = driver_points
+                            total_points += sum(driver_points.values())
 
                     total_cost = base_cost + const_salary
 

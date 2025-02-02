@@ -23,10 +23,7 @@ from gridrival_ai.scoring._calculator import (
     race_dtype,
 )
 from gridrival_ai.scoring.base import ScoringConfig
-from gridrival_ai.scoring.types import (
-    ConstructorWeekendData,
-    DriverWeekendData,
-)
+from gridrival_ai.scoring.types import ConstructorWeekendData, DriverWeekendData
 
 
 class Scorer:

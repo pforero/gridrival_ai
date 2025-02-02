@@ -9,9 +9,12 @@ from gridrival_ai.optimization.types import (
 
 def test_driver_scoring_creation():
     """Test DriverScoring dataclass creation and attributes."""
-    scoring = DriverScoring(regular_points=10.5, salary=15.0, can_be_talent=True)
-
+    points_dict = {"qualifying": 5.0, "race": 5.5}
+    scoring = DriverScoring(
+        regular_points=10.5, points_dict=points_dict, salary=15.0, can_be_talent=True
+    )
     assert scoring.regular_points == 10.5
+    assert scoring.points_dict == points_dict
     assert scoring.salary == 15.0
     assert scoring.can_be_talent is True
 

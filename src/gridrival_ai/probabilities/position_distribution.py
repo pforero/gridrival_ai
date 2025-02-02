@@ -5,8 +5,9 @@ This module provides a high-level interface for accessing driver position
 probabilities across different sessions.
 """
 
-from typing import Dict, Set
+from typing import Dict, Optional, Set, Tuple
 
+from gridrival_ai.data.reference import CONSTRUCTORS
 from gridrival_ai.probabilities.driver_distributions import DriverDistribution
 from gridrival_ai.probabilities.types import JointProbabilities, SessionProbabilities
 
@@ -45,6 +46,22 @@ class PositionDistributions:
     def __init__(self, driver_distributions: Dict[str, DriverDistribution]):
         """Initialize with driver distributions."""
         self.driver_distributions = driver_distributions
+
+    def get_constructor_drivers(self, constructor_id: str) -> Optional[Tuple[str, str]]:
+        """Get the driver IDs for a constructor.
+
+        Parameters
+        ----------
+        constructor_id : str
+            Constructor three-letter abbreviation
+
+        Returns
+        -------
+        Optional[Tuple[str, str]]
+            Tuple of two driver IDs if constructor exists, None otherwise
+        """
+        constructor = CONSTRUCTORS.get(constructor_id)
+        return constructor.drivers if constructor else None
 
     def get_session_probabilities(
         self, driver_id: str, session: str

@@ -5,21 +5,23 @@ composition under budget and roster constraints.
 """
 
 from dataclasses import dataclass
-from typing import NamedTuple
+from typing import Dict, NamedTuple
 
 
 @dataclass(frozen=True)
 class DriverScoring:
-    """Pre-calculated scoring data for a driver.
+    """Driver scoring information for optimization.
 
     Parameters
     ----------
     regular_points : float
-        Expected points for the race weekend
+        Expected points without talent driver bonus
+    points_dict : Dict[str, float]
+        Breakdown of points by component
     salary : float
-        Current driver salary
+        Driver salary in millions
     can_be_talent : bool
-        Whether eligible to be talent driver (salary <= 18M)
+        Whether driver is eligible for talent driver selection
 
     Notes
     -----
@@ -28,6 +30,7 @@ class DriverScoring:
     """
 
     regular_points: float
+    points_dict: Dict[str, float]
     salary: float
     can_be_talent: bool
 

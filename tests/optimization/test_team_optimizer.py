@@ -27,31 +27,44 @@ def mock_points_calculator():
     def get_driver_points(driver_id, format=None):
         # Points roughly proportional to cost for testing
         points_map = {
-            "VER": 100.0,  # Expensive, high points
-            "LAW": 80.0,
-            "RUS": 85.0,
-            "ANT": 75.0,
-            "LEC": 82.0,
-            "HAM": 78.0,
-            "NOR": 70.0,
-            "PIA": 60.0,  # Cheap enough for talent
-            "ALO": 72.0,
-            "STR": 58.0,  # Cheap enough for talent
+            "VER": {"qualifying": 50.0, "race": 50.0},  # Total 100
+            "LAW": {"qualifying": 40.0, "race": 40.0},  # Total 80
+            "RUS": {"qualifying": 42.5, "race": 42.5},  # Total 85
+            "ANT": {"qualifying": 37.5, "race": 37.5},  # Total 75
+            "LEC": {"qualifying": 41.0, "race": 41.0},  # Total 82
+            "HAM": {"qualifying": 39.0, "race": 39.0},  # Total 78
+            "NOR": {"qualifying": 35.0, "race": 35.0},  # Total 70
+            "PIA": {"qualifying": 30.0, "race": 30.0},  # Total 60
+            "ALO": {"qualifying": 36.0, "race": 36.0},  # Total 72
+            "STR": {"qualifying": 29.0, "race": 29.0},  # Total 58
         }
-        return points_map.get(driver_id, 50.0)
+        base_points = points_map.get(driver_id, {"qualifying": 25.0, "race": 25.0})
+
+        # Add sprint points if sprint format
+        if format == RaceFormat.SPRINT:
+            base_points["sprint"] = (
+                base_points["qualifying"] * 0.2
+            )  # 20% of qualifying points
+
+        return base_points
 
     calculator.calculate_driver_points = Mock(side_effect=get_driver_points)
 
     # Default points for constructors
-    def get_constructor_points(constructor_id):
+    def get_constructor_points(constructor_id, format=None):
         points_map = {
-            "RBR": 150.0,
-            "MER": 130.0,
-            "FER": 125.0,
-            "MCL": 110.0,
-            "AST": 100.0,
+            "RBR": {"qualifying": 75.0, "race": 75.0},  # Total 150
+            "MER": {"qualifying": 65.0, "race": 65.0},  # Total 130
+            "FER": {"qualifying": 62.5, "race": 62.5},  # Total 125
+            "MCL": {"qualifying": 55.0, "race": 55.0},  # Total 110
+            "AST": {"qualifying": 50.0, "race": 50.0},  # Total 100
+            "ALP": {"qualifying": 45.0, "race": 45.0},  # Total 90
+            "WIL": {"qualifying": 40.0, "race": 40.0},  # Total 80
+            "HAA": {"qualifying": 37.5, "race": 37.5},  # Total 75
+            "ALF": {"qualifying": 35.0, "race": 35.0},  # Total 70
+            "AT": {"qualifying": 32.5, "race": 32.5},  # Total 65
         }
-        return points_map.get(constructor_id, 80.0)
+        return points_map.get(constructor_id, {"qualifying": 25.0, "race": 25.0})
 
     calculator.calculate_constructor_points = Mock(side_effect=get_constructor_points)
 
@@ -275,7 +288,7 @@ def test_alternative_solutions(mock_points_calculator, sample_league_data):
 
     # Modify points calculator to create ties
     def equal_points(driver_id, format=None):
-        return 75.0  # All drivers have equal points
+        return {"qualifying": 37.5, "race": 37.5}  # All drivers have equal points
 
     mock_points_calculator.calculate_driver_points = Mock(side_effect=equal_points)
 
@@ -335,7 +348,9 @@ def test_points_breakdown(mock_points_calculator, sample_league_data):
     regular_points = mock_points_calculator.calculate_driver_points(
         result.best_solution.talent_driver
     )
-    assert talent_points == regular_points * 2
+    # Each component should be doubled
+    assert talent_points["qualifying"] == regular_points["qualifying"] * 2
+    assert talent_points["race"] == regular_points["race"] * 2
 
 
 def test_remaining_budget(mock_points_calculator, sample_league_data):

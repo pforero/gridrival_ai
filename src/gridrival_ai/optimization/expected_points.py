@@ -145,11 +145,11 @@ class ExpectedPointsCalculator:
             Expected points for session
         """
         if session == "qualifying":
-            points_table = self.scorer.tables.base_points[0]
+            points_table = self.scorer.tables.driver_points[0]
         elif session == "race":
-            points_table = self.scorer.tables.base_points[1]
+            points_table = self.scorer.tables.driver_points[1]
         else:  # sprint
-            points_table = self.scorer.tables.base_points[2]
+            points_table = self.scorer.tables.driver_points[2]
 
         return sum(prob * points_table[pos] for pos, prob in position_probs.items())
 
@@ -310,3 +310,85 @@ class ExpectedPointsCalculator:
                 total_points += prob * points
 
         return total_points
+
+    @lru_cache(maxsize=128)
+    def calculate_constructor_points(
+        self, constructor_id: str, format: RaceFormat = RaceFormat.STANDARD
+    ) -> Dict[str, float]:
+        """Calculate expected points breakdown for a constructor.
+
+        This method calculates the expected fantasy points for a constructor using
+        joint probability distributions for the two drivers' positions. Qualifying
+        points are calculated independently since positions can overlap, while race
+        points use joint distributions to respect the constraint that drivers cannot
+        finish in the same position.
+
+        Parameters
+        ----------
+        constructor_id : str
+            Constructor identifier (e.g., "RBR" for Red Bull Racing)
+        format : RaceFormat, optional
+            Race weekend format, by default RaceFormat.STANDARD
+            Note: Format only affects race weekend structure, not scoring
+
+        Returns
+        -------
+        Dict[str, float]
+            Expected points breakdown by component:
+            - qualifying: Points from both drivers' qualifying positions
+            - race: Points from both drivers' race finishing positions
+
+        Notes
+        -----
+        The calculation uses:
+        - Independent distributions for qualifying (positions can overlap)
+        - Joint distributions for race (positions must be different)
+        - Pre-calculated lookup tables from the scoring configuration
+
+        Points are calculated as expected values:
+        E[Points] = Σ P(pos1, pos2) * (Points(pos1) + Points(pos2))
+
+        Examples
+        --------
+        >>> calculator = ExpectedPointsCalculator(...)
+        >>> points = calculator.calculate_constructor_points("RBR")
+        >>> print(points)
+        {'qualifying': 45.2, 'race': 85.3}
+        """
+        # Get drivers for this constructor
+        drivers = self.distributions.get_constructor_drivers(constructor_id)
+        if not drivers or len(drivers) != 2:
+            return {"qualifying": 0.0, "race": 0.0}
+
+        driver1_id, driver2_id = drivers
+
+        # Calculate qualifying points (positions can overlap)
+        qual_points = 0.0
+        for driver_id in drivers:
+            qual_probs = self.distributions.get_session_probabilities(
+                driver_id, "qualifying"
+            )
+            qual_points += sum(
+                prob * self.scorer.tables.constructor_points[0, pos]
+                for pos, prob in qual_probs.items()
+            )
+
+        # Calculate race points using joint distribution (positions must differ)
+        race_points = 0.0
+        joint_race_probs = self.distributions.get_driver_pair_distribution(
+            driver1_id, driver2_id, session="race"
+        )
+
+        # For each possible combination of positions
+        for (pos1, pos2), prob in joint_race_probs.items():
+            # Calculate points for this combination
+            combo_points = (
+                self.scorer.tables.constructor_points[1, pos1]  # Driver 1 points
+                + self.scorer.tables.constructor_points[1, pos2]  # Driver 2 points
+            )
+            race_points += prob * combo_points
+
+        return {
+            "qualifying": qual_points,
+            "race": race_points,
+        }
