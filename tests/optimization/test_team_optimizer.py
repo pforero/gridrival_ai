@@ -24,7 +24,7 @@ def mock_points_calculator():
     calculator = Mock()
 
     # Default points for drivers
-    def get_driver_points(driver_id, format=None, is_talent=False):
+    def get_driver_points(driver_id, format=None):
         # Points roughly proportional to cost for testing
         points_map = {
             "VER": 100.0,  # Expensive, high points
@@ -267,7 +267,6 @@ def test_sprint_format(mock_points_calculator, sample_league_data):
         mock_points_calculator.calculate_driver_points.assert_any_call(
             driver_id,
             format=RaceFormat.SPRINT,
-            is_talent=False,  # No talent driver in sprint format
         )
 
 
@@ -275,8 +274,8 @@ def test_alternative_solutions(mock_points_calculator, sample_league_data):
     """Test finding alternative optimal solutions."""
 
     # Modify points calculator to create ties
-    def equal_points(driver_id, format=None, is_talent=False):
-        return 70.0  # Same points for all drivers
+    def equal_points(driver_id, format=None):
+        return 75.0  # All drivers have equal points
 
     mock_points_calculator.calculate_driver_points = Mock(side_effect=equal_points)
 

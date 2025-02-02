@@ -118,7 +118,7 @@ class TeamOptimizer:
 
             # Calculate regular points
             regular = self.points_calculator.calculate_driver_points(
-                driver_id, format=self.race_format, is_talent=False
+                driver_id, format=self.race_format
             )
 
             self.driver_scores[driver_id] = DriverScoring(
