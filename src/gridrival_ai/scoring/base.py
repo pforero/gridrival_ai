@@ -62,13 +62,9 @@ class ScoringConfig:
     """
 
     # Driver scoring
-    qualifying_points: dict = field(
-        default_factory=lambda: DEFAULT_QUALIFYING_POINTS
-    )
+    qualifying_points: dict = field(default_factory=lambda: DEFAULT_QUALIFYING_POINTS)
     race_points: dict = field(default_factory=lambda: DEFAULT_RACE_POINTS)
-    sprint_points: dict = field(
-        default_factory=lambda: DEFAULT_SPRINT_POINTS
-    )
+    sprint_points: dict = field(default_factory=lambda: DEFAULT_SPRINT_POINTS)
 
     # Constructor scoring
     constructor_qualifying_points: dict = field(
@@ -81,12 +77,8 @@ class ScoringConfig:
     # Additional scoring components
     completion_stage_points: float = DEFAULT_COMPLETION_STAGE_POINTS
     overtake_multiplier: float = DEFAULT_OVERTAKE_MULTIPLIER
-    improvement_points: dict = field(
-        default_factory=lambda: DEFAULT_IMPROVEMENT_POINTS
-    )
-    teammate_points: dict = field(
-        default_factory=lambda: DEFAULT_TEAMMATE_POINTS
-    )
+    improvement_points: dict = field(default_factory=lambda: DEFAULT_IMPROVEMENT_POINTS)
+    teammate_points: dict = field(default_factory=lambda: DEFAULT_TEAMMATE_POINTS)
 
     def __post_init__(self) -> None:
         """Validate configuration values."""

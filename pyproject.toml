@@ -98,7 +98,6 @@ python_version = "3.10"
 strict = true
 warn_unused_ignores = true
 warn_redundant_casts = true
-warn_unused_configs = true
 disallow_any_generics = true
 disallow_subclassing_any = true
 disallow_untyped_defs = true

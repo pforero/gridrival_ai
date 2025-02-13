@@ -1,539 +1,271 @@
-"""
-Module for converting betting odds to position probabilities using robust constrained
-optimization.
-
-This module provides functionality to convert decimal betting odds into valid
-probability distributions for race finishing positions. It uses advanced optimization
-techniques to ensure the resulting probabilities are consistent with market odds while
-maintaining mathematical properties like proper probability distributions.
-
-The main class OddsToPositionProbabilityConverter handles:
-- Bookmaker margin removal
-- Favorite-longshot bias adjustment
-- Market constraint satisfaction
-- Probability distribution smoothing
-"""
-
-import functools
+import math
 from typing import Dict, List
 
 import numpy as np
-from scipy.optimize import Bounds, minimize
 
-from gridrival_ai.utils.odds_conversion import power_method
-
-SMOOTHNESS_ALPHA = 5.0
-SHAPE_ALPHA = 7.0
+TOLERANCE = 1e-6
 
 
-class OddsToPositionProbabilityConverter:
-    """Convert decimal odds to valid probability distributions using optimization.
+def basic_method(odds: List[float], target_probability: float = 1.0) -> np.ndarray:
+    """
+    Convert betting odds to probabilities by taking reciprocals and removing the margin.
 
-    This class implements a robust method to convert decimal betting odds into proper
-    probability distributions for race finishing positions. It uses advanced
-    optimization techniques with multiple stability enhancements to ensure reliable
-    results.
-
-    The conversion process involves:
-    1. Smart initialization using market constraints
-    2. Constraint relaxation for numerical stability
-    3. Multiple optimization strategies with fallbacks
-    4. Shape and smoothness regularization
-    5. Bookmaker margin removal
+    For a list of odds [o1, o2, ...], the raw implied probabilities are
+        r[i] = 1 / o[i]
+    and then they are normalized so that they sum to target_probability.
 
     Parameters
     ----------
-    driver_odds : List[Dict[str, float]]
-        List of dictionaries containing odds for each driver.
-        Required keys:
-            - driver_id: str
-                Unique identifier for the driver
-            - 1: float
-                Decimal odds for finishing 1st (winner)
-        Optional keys:
-            - N: float
-                Decimal odds for finishing in positions 1 to N
-                (e.g., 3 for top3, 6 for top6, etc.)
+    odds : List[float]
+        List of decimal odds (> 1.0).
+    target_probability : float, optional
+        The sum of the probabilities after normalization.
+        For mutually exclusive outcomes (e.g. win) target_probability=1.
 
-    Attributes
-    ----------
-    drivers : List[str]
-        List of driver IDs in the same order as input odds
-    num_drivers : int
-        Total number of drivers
-    markets : List[int]
-        Available market positions (e.g., [1, 3, 6] for winner, podium, top6)
-    adjusted_probs : Dict[int, np.ndarray]
-        Adjusted probabilities for each market after removing bookmaker margin
-    position_probs : np.ndarray
-        Matrix of position probabilities (drivers × positions)
-
-    Notes
-    -----
-    The number of possible positions is determined by the number of drivers.
-    Position keys in odds must be integers and represent cumulative finishes.
-    For example:
-        {"driver_id": "VER", "1": 1.5, "3": 1.1, "6": 1.05}
-        means odds for:
-        - Finishing 1st: 1.5
-        - Finishing in positions 1-3: 1.1
-        - Finishing in positions 1-6: 1.05
+    Returns
+    -------
+    np.ndarray
+        Array of probabilities summing to target_probability.
 
     Examples
     --------
-    >>> odds = [
-    ...     {"driver_id": "VER", "1": 1.5, "3": 1.1},
-    ...     {"driver_id": "HAM", "1": 3.0, "3": 1.5},
-    ...     {"driver_id": "LEC", "1": 4.0, "3": 1.8}
-    ... ]
-    >>> converter = OddsToPositionProbabilityConverter(odds)
-    >>> probs = converter.calculate_position_probabilities()
-    >>> print(probs["VER"][1])  # Probability of VER finishing 1st
-    0.55
+    >>> odds = [1.9, 3.5, 4.2]
+    >>> basic_method(odds)  # approximately [0.526, 0.286, 0.188]
+    """
+    raw_probs = np.array([1 / o for o in odds])
+    return raw_probs * (target_probability / raw_probs.sum())
+
+
+def _dp_baseline_from_win_probs(
+    driver_odds: List[Dict[str, float]], drivers: List[str]
+) -> np.ndarray:
+    """
+    Compute a baseline grid probability matrix using only the win probabilities.
+
+    Assumes that each driver's win probability is stored under key "1"
+    (and that these values sum to 1 across drivers).
+
+    The method uses a dynamic–programming (Harville–style) algorithm.
+
+    Returns
+    -------
+    np.ndarray
+        An (n x n) array B where B[i, j] is the probability that driver i finishes in grid position j+1.
+    """
+    n = len(drivers)
+    # Here, driver_odds already hold win probabilities (after conversion).
+    strengths = np.array([d["1"] for d in driver_odds])
+    dp = np.zeros(1 << n)
+    full_mask = (1 << n) - 1
+    dp[full_mask] = 1.0
+
+    # B[i, pos] accumulates the probability that driver i finishes in position pos+1.
+    B = np.zeros((n, n))
+
+    # For each subset (mask), assign the finishing position (0-indexed) as:
+    # pos = n - (number of drivers in mask)
+    for mask in range(full_mask, -1, -1):
+        if dp[mask] == 0:
+            continue
+        available = [i for i in range(n) if mask & (1 << i)]
+        if not available:
+            continue
+        s = sum(strengths[i] for i in available)
+        pos = n - len(available)  # 0-indexed: pos=0 means 1st place
+        for i in available:
+            p_i = strengths[i] / (s + 1e-10)
+            prob = dp[mask] * p_i
+            B[i, pos] += prob
+            new_mask = mask & ~(1 << i)
+            dp[new_mask] += prob
+    return B
+
+
+class OddsToPositionProbabilityConverter:
+    """
+    Convert betting odds (in decimal format) from various markets into a grid probability matrix.
+
+    Each driver is provided with betting odds for one or more cumulative markets.
+    For example, in a 5–driver race a driver might be given:
+
+         {"driver_id": "VER", "1": 5.0, "3": 2.0, "5": 1.0}
+
+    meaning that:
+      - The win odds are 5.0 (implying a ~20% chance after fair conversion),
+      - The top–3 odds are 2.0 (implying a 50% chance to finish in the top 3),
+      - The full grid (top–5) odds are 1.0 (i.e. a certainty, so if missing it is defaulted to 1.0).
+
+    The converter works as follows:
+
+      1. In __init__, the provided odds are first converted into implied probabilities.
+         For the win market ("1") the conversion is done collectively using basic_method
+         so that win probabilities sum to 1. For any other market (e.g. "3"),
+         each driver's implied probability is computed as 1 / (odds).
+         For the final market (equal to the number of drivers), if a driver omits it,
+         a default value of 1.0 is used.
+
+      2. A baseline grid probability matrix is computed using the (converted) win probabilities
+         via a dynamic–programming (Harville) algorithm.
+
+      3. For each driver and grid position, an adjustment factor is computed so that the cumulative
+         sums of grid probabilities (positions 1 to m) match the (converted) cumulative probabilities.
+         (For grid position j, the factor is the geometric mean of the ratios
+            R(m) = (given cumulative probability for market m) / (baseline cumulative probability for positions 1..m)
+         taken over all provided markets m with m >= j.)
+
+      4. Finally, iterative proportional fitting (IPF) rebalances the adjusted matrix so that
+         each driver's probabilities sum to 1 and each finishing position's probabilities sum to 1.
     """
 
     def __init__(self, driver_odds: List[Dict[str, float]]) -> None:
-        """Initialize converter with driver odds.
+        """
+        Initialize the converter with betting odds.
 
         Parameters
         ----------
         driver_odds : List[Dict[str, float]]
-            List of dictionaries containing odds for each driver.
-            See class docstring for format details.
-
-        Raises
-        ------
-        ValueError
-            If winner odds (position 1) are missing for any driver
+            Each dictionary must contain at least:
+              - "driver_id": str
+              - "1": float, the win odds (decimal odds > 1)
+            Optionally, additional keys (e.g. "3", "5", etc.) are cumulative market odds.
+            For the final market (equal to the number of drivers) if omitted, a default of 1.0 is used.
         """
         self.driver_odds = driver_odds
         self.drivers = [d["driver_id"] for d in driver_odds]
         self.num_drivers = len(self.drivers)
-
-        # Process markets and compute adjusted probabilities
         self.markets = self._get_markets()
-        self.adjusted_probs = self._compute_adjusted_probabilities()
 
-        # Initialize and optimize probabilities
-        self.position_probs = self._initialize_prob_matrix()
-        self._optimize_probabilities()
+        # --- Convert odds to implied probabilities ---
+        # For market "1": convert collectively so that win probabilities sum to 1.
+        win_odds = [d["1"] for d in self.driver_odds]
+        win_probs = basic_method(win_odds, target_probability=1.0)
+        for i, d in enumerate(self.driver_odds):
+            d["1"] = win_probs[i]
+        # For every other market, convert by taking the reciprocal.
+        # (We assume that the provided odds are margin–free or that the margin is acceptable.)
+        for d in self.driver_odds:
+            for k in d.keys():
+                if k.isdigit() and k != "1":
+                    d[k] = 1 / float(d[k])
+        # Ensure that every driver has an entry for the final market (equal to num_drivers).
+        final_key = str(self.num_drivers)
+        for d in self.driver_odds:
+            if final_key not in d:
+                d[final_key] = 1.0  # 100% chance to finish somewhere
 
     def _get_markets(self) -> List[int]:
-        """Get available markets from driver odds.
-
-        Markets are positions for which we have odds (e.g., 1 for winner, 3 for podium).
-        Winner odds (1) must be present for all drivers.
-
-        Returns
-        -------
-        List[int]
-            Sorted list of available markets in ascending order.
+        """
+        Extract and return a sorted list of market keys (as integers) from the input odds.
 
         Raises
         ------
         ValueError
-            If winner odds (position 1) are missing for any driver.
+            If any driver is missing win odds (market "1").
         """
-        # Get all numeric keys from odds that aren't 'driver_id'
         all_markets = set()
-        for odds in self.driver_odds:
-            markets = {
-                int(k)
-                for k in odds.keys()
-                if isinstance(k, (int, str)) and str(k).isdigit()
-            }
-            all_markets.update(markets)
+        for d in self.driver_odds:
+            for k in d:
+                if k.isdigit():
+                    all_markets.add(int(k))
+            if "1" not in d:
+                raise ValueError(
+                    f"Driver {d.get('driver_id', 'unknown')} is missing win odds (market '1')."
+                )
+        return sorted(all_markets)
 
-        if 1 not in all_markets:
-            raise ValueError("Winner odds (1) are required for all drivers")
-
-        # Sort markets in ascending order
-        return sorted(list(all_markets))
-
-    def _compute_adjusted_probabilities(self) -> Dict[int, np.ndarray]:
-        """Adjust raw odds to remove bookmaker margin using the power method.
-
-        This method processes each market position and converts the decimal odds to
-        probabilities using Shin's power method. The method handles:
-        - Bookmaker margin removal
-        - Favorite-longshot bias adjustment
-        - Target probability scaling based on position
-        - Invalid odds validation and fallback
-
-        Returns
-        -------
-        Dict[int, np.ndarray]
-            Dictionary mapping position numbers to adjusted probabilities.
-            Key 1 is for winner, key N is for positions 1 to N.
-            Each value is a numpy array of probabilities summing to N.
-
-        Notes
-        -----
-        The power method is used to transform raw probabilities while maintaining
-        proper probability axioms and addressing market biases. For each market:
-        - Target probability equals position number (e.g., 3 for top-3)
-        - Invalid odds (≤ 1.0) result in zero probabilities
-        - The method optimizes a power parameter to achieve target probability sum
+    def _compute_baseline(self) -> np.ndarray:
         """
-
-        def get_market_odds(pos: int) -> List[float]:
-            """Extract valid odds for a given market position."""
-            return [float(d.get(str(pos)) or d.get(pos) or 0) for d in self.driver_odds]
-
-        def process_market(pos: int, odds: List[float]) -> np.ndarray:
-            """Process single market position odds into probabilities."""
-            target = float(min(pos, self.num_drivers))
-            if all(o > 1.0 for o in odds):
-                probs, _ = power_method(odds, target_probability=target)
-                return probs
-            return np.zeros(len(odds))
-
-        return {
-            pos: process_market(pos, odds)
-            for pos in self.markets
-            if (odds := get_market_odds(pos)) and any(odds)
-        }
-
-    def _initialize_prob_matrix(self) -> np.ndarray:
-        """Create smart initial guess respecting market constraints.
-
-        For each market interval (between consecutive market positions),
-        distribute probabilities uniformly. For example:
-        - If P(top1) = 0.1 and P(top3) = 0.3:
-            P(pos1) = 0.1
-            P(pos2) = (0.3 - 0.1) / 2 = 0.1
-            P(pos3) = (0.3 - 0.1) / 2 = 0.1
+        Compute the baseline grid probability matrix from win probabilities.
 
         Returns
         -------
         np.ndarray
-            Initial probability matrix respecting market constraints.
-            Shape is (num_drivers, num_drivers).
+            An (n x n) matrix computed via the Harville DP algorithm.
         """
-        matrix = np.zeros((self.num_drivers, self.num_drivers))
+        return _dp_baseline_from_win_probs(self.driver_odds, self.drivers)
 
-        # Process each market interval
-        prev_market = 0
-        prev_probs = np.zeros(self.num_drivers)
-
-        for market in self.markets:
-            current_probs = self.adjusted_probs[market]
-            positions_in_interval = market - prev_market
-
-            if positions_in_interval > 0:
-                # Distribute probability difference uniformly across positions
-                prob_diff = current_probs - prev_probs
-                prob_per_position = prob_diff / positions_in_interval
-
-                # Assign probabilities for each position in interval
-                for pos in range(prev_market, market):
-                    matrix[:, pos] = prob_per_position
-
-            prev_market = market
-            prev_probs = current_probs
-
-        # Handle remaining positions if any
-        if prev_market < self.num_drivers:
-            remaining_positions = self.num_drivers - prev_market
-            remaining_probs = 1.0 - prev_probs
-            prob_per_position = remaining_probs / remaining_positions
-
-            for pos in range(prev_market, self.num_drivers):
-                matrix[:, pos] = prob_per_position
-
-        return matrix
-
-    def _optimize_probabilities(self) -> None:
-        """Robust optimization with multiple fallback strategies.
-
-        Attempts optimization using different solvers in order of preference:
-        1. SLSQP with conservative settings
-        2. trust-constr with conservative settings
-        3. Fallback to iterative proportional fitting if both fail
-
-        The optimization process minimizes a regularized objective function while
-        satisfying probability constraints and market odds constraints.
+    def _adjust_by_markets(self, B: np.ndarray) -> np.ndarray:
         """
-        try:
-            # Try SLSQP first with more conservative settings
-            self._run_optimization(method="SLSQP", max_iter=1000)
-        except RuntimeError:
-            try:
-                # Try trust-constr with more conservative settings
-                self._run_optimization(method="trust-constr", max_iter=2000)
-            except Exception as e:
-                # If both fail, use fallback
-                self._apply_fallback_solution()
-                print(f"Optimization failed, using approximate solution: {str(e)}")
+        Adjust the baseline matrix B using the additional cumulative probabilities.
 
-    def _run_optimization(self, method: str, max_iter: int) -> None:
-        """Core optimization routine with enhanced settings.
-
-        Parameters
-        ----------
-        method : str
-            Optimization method to use ("SLSQP" or "trust-constr")
-        max_iter : int
-            Maximum number of iterations for the optimizer
-
-        Raises
-        ------
-        RuntimeError
-            If optimization fails to converge
-        """
-        x0 = self.position_probs.flatten()
-
-        # More conservative bounds to avoid numerical issues
-        bounds = Bounds(1e-6, 1.0)
-
-        constraints = [
-            # Row sums must equal 1
-            {
-                "type": "eq",
-                "fun": lambda x: x.reshape((self.num_drivers, self.num_drivers)).sum(
-                    axis=1
-                )
-                - 1,
-            },
-            # Column sums must equal 1
-            {
-                "type": "eq",
-                "fun": lambda x: x.reshape((self.num_drivers, self.num_drivers)).sum(
-                    axis=0
-                )
-                - 1,
-            },
-        ]
-
-        constraints += self._get_relaxed_constraints()
-
-        if method == "SLSQP":
-            options = {
-                "maxiter": max_iter,
-                "ftol": 1e-4,  # Less strict tolerance
-                "eps": 1e-6,  # Less strict step size
-                "disp": True,
-            }
-        else:  # trust-constr
-            options = {
-                "maxiter": max_iter,
-                "xtol": 1e-4,  # Less strict tolerance
-                "gtol": 1e-4,  # Less strict gradient tolerance
-                "disp": True,
-            }
-
-        res = minimize(
-            self._regularized_objective,
-            x0,
-            method=method,
-            bounds=bounds,
-            constraints=constraints,
-            options=options,
-        )
-
-        if not res.success:
-            raise RuntimeError(f"Optimization failed: {res.message}")
-
-        self.position_probs = res.x.reshape((self.num_drivers, self.num_drivers))
-
-    def _calculate_expected_positions(self, win_probs: np.ndarray) -> np.ndarray:
-        """Calculate expected positions accounting for ties.
-
-        For drivers with equal win probabilities, assigns their average position.
-        E.g., if drivers 2-5 all have 12.5% win probability, they all get
-        expected position (2+3+4+5)/4 = 3.5
-
-        Parameters
-        ----------
-        win_probs : np.ndarray
-            Array of win probabilities for each driver
+        For each driver i and each grid position j (1-indexed), an adjustment factor is computed.
+        For each provided market m (with m >= j) the ratio is:
+            R(i, m) = (given cumulative probability for market m) / (baseline cumulative probability for positions 1..m)
+        The adjustment factor for grid position j is the geometric mean of these ratios.
+        Then, the baseline probability B[i, j] is multiplied by the factor.
 
         Returns
         -------
         np.ndarray
-            Array of expected positions for each driver
+            The adjusted matrix.
         """
-        n = len(win_probs)
-        sorted_idx = np.argsort(-win_probs)
-        sorted_probs = win_probs[sorted_idx]
+        n = self.num_drivers
+        P = np.copy(B)
+        for i, d in enumerate(self.driver_odds):
+            # Get the provided markets for driver i.
+            provided_markets = sorted([int(k) for k in d.keys() if k.isdigit()])
+            if n not in provided_markets:
+                provided_markets.append(n)
+            # Compute ratios R for each provided market m.
+            R = {}
+            for m in provided_markets:
+                # Baseline cumulative probability for positions 1..m.
+                baseline_cum = float(
+                    np.sum(B[i, :m])
+                )  # positions 0..m-1 in 0-indexing.
+                given_cum = d.get(str(m), 1.0)
+                R[m] = given_cum / (baseline_cum + 1e-10)
+            # Adjust each grid position j (1-indexed).
+            for j in range(1, n + 1):
+                factors = [R[m] for m in provided_markets if m >= j]
+                if factors:
+                    log_mean = np.mean([math.log(f) for f in factors])
+                    factor = math.exp(log_mean)
+                else:
+                    factor = 1.0
+                P[i, j - 1] = B[i, j - 1] * factor
+        return P
 
-        expected_pos = np.zeros(n)
-        i = 0
-        while i < n:
-            # Find all drivers with same probability
-            prob = sorted_probs[i]
-            count = 1
-            while i + count < n and sorted_probs[i + count] == prob:
-                count += 1
-
-            # Calculate average position for this group
-            pos = range(i + 1, i + count + 1)
-            avg_pos = sum(pos) / count
-
-            # Assign to all drivers in group
-            for j in range(count):
-                expected_pos[sorted_idx[i + j]] = avg_pos
-
-            i += count
-
-        return expected_pos
-
-    @functools.lru_cache(maxsize=1)
-    def _compute_expected_positions(self) -> np.ndarray:
-        win_probs = self.adjusted_probs[1]
-        return self._calculate_expected_positions(win_probs)
-
-    def _shape_penalty(self, matrix: np.ndarray) -> float:
-        """Calculate shape and smoothness penalty for probability distribution.
-
-        Combines two penalty terms:
-        1. Shape penalty: deviation from ideal shape centered at expected position
-        2. Smoothness penalty: penalizes large jumps between adjacent positions
-
-        Parameters
-        ----------
-        matrix : np.ndarray
-            Probability matrix to evaluate, shape (num_drivers, num_drivers)
+    def _iterative_proportional_fitting(
+        self, M: np.ndarray, tol: float = 1e-8, max_iter: int = 1000
+    ) -> np.ndarray:
+        """
+        Rebalance the matrix M to be doubly–stochastic (each row and column sums to 1)
+        using iterative proportional fitting.
 
         Returns
         -------
-        float
-            Combined shape and smoothness penalty value
+        np.ndarray
+            The balanced matrix.
         """
-        expected_positions = self._compute_expected_positions()
-        positions = np.arange(1, self.num_drivers + 1)
-
-        # Calculate position differences for each driver and position
-        # Shape: (num_positions, num_drivers)
-        positions_diff = np.abs(positions[:, None] - expected_positions[None, :])
-
-        # Calculate ideal shapes based on win probabilities
-        # Shape: (num_drivers, num_positions)
-        ideal_shapes = self.adjusted_probs[1][:, None] ** (
-            positions_diff.T / SHAPE_ALPHA
-        )
-        ideal_shapes /= ideal_shapes.sum(axis=1)[:, None]
-
-        # Base shape penalty
-        base_penalty = np.sum((matrix - ideal_shapes) ** 2)
-
-        # Smoothness penalty
-        # Shape: (num_drivers, num_positions-1)
-        diffs = np.diff(matrix, axis=1)
-
-        # Shape: (num_positions-1, num_drivers)
-        position_weights = 1.0 / (
-            1.0 + np.abs(positions[:-1, None] - expected_positions[None, :])
-        )
-
-        # Transpose position_weights to match diffs shape
-        smoothness_penalty = np.sum(position_weights.T * diffs**2)
-
-        return base_penalty + SMOOTHNESS_ALPHA * smoothness_penalty
-
-    def _regularized_objective(self, x: np.ndarray) -> float:
-        """Objective function balancing entropy and shape penalties.
-
-        Combines two terms:
-        1. Negative entropy (to maximize entropy) with small weight
-        2. Shape penalty (to minimize) with larger weight
-
-        Parameters
-        ----------
-        x : np.ndarray
-            Flattened probability matrix
-
-        Returns
-        -------
-        float
-            Combined objective value to minimize
-        """
-        matrix = x.reshape((self.num_drivers, self.num_drivers))
-
-        # Entropy term - positive weight because we want to maximize it
-        entropy = -np.sum(matrix * np.log(matrix + 1e-10))
-
-        # Shape penalty - minimize this
-        shape = self._shape_penalty(matrix)
-
-        # Note: positive weight for entropy because we want to maximize it
-        # Negative weight for shape because we want to minimize it
-
-        return -0.2 * entropy + 0.8 * shape
-
-    def _get_relaxed_constraints(self) -> list:
-        """Create constraints with tolerance windows for all markets.
-
-        Each market constraint ensures that the cumulative probabilities up to position
-        N match the adjusted market probabilities. For example:
-        - P1 market: P(pos1) matches market probability
-        - P3 market: P(pos1) + P(pos2) + P(pos3) matches market probability
-
-        Returns
-        -------
-        list
-            List of constraint dictionaries for scipy.optimize.minimize
-        """
-        constraints = []
-
-        # Add constraints for each market
-        for market_pos in self.markets:
-
-            def cumulative_constraint(x, pos=market_pos):
-                matrix = x.reshape((self.num_drivers, self.num_drivers))
-                cumulative_probs = matrix[:, :pos].sum(axis=1)
-                return cumulative_probs - self.adjusted_probs[pos]
-
-            constraints.append(
-                {
-                    "type": "eq",
-                    "fun": cumulative_constraint,
-                    "tol": 1e-3,  # Allow small deviations to help convergence
-                }
-            )
-
-        return constraints
-
-    def _apply_fallback_solution(self) -> None:
-        """Fallback to iterative proportional fitting when optimization fails.
-
-        Uses a simple row/column normalization approach to ensure valid probabilities
-        when the main optimization methods fail. This is less accurate but more
-        robust than the primary optimization methods.
-        """
-        # Simple row/column normalization
-        for _ in range(10):
-            # Normalize rows
-            row_sums = self.position_probs.sum(axis=1)
-            self.position_probs /= row_sums[:, None]
-
-            # Normalize columns
-            col_sums = self.position_probs.sum(axis=0)
-            self.position_probs /= col_sums[None, :]
+        Q = np.copy(M)
+        for _ in range(max_iter):
+            row_sums = Q.sum(axis=1)
+            Q = Q / (row_sums[:, None] + 1e-10)
+            col_sums = Q.sum(axis=0)
+            Q = Q / (col_sums[None, :] + 1e-10)
+            if np.allclose(Q.sum(axis=1), 1, atol=tol) and np.allclose(
+                Q.sum(axis=0), 1, atol=tol
+            ):
+                break
+        return Q
 
     def calculate_position_probabilities(self) -> Dict[str, Dict[int, float]]:
-        """Calculate and return validated position probabilities.
+        """
+        Calculate and return the final grid finishing position probabilities.
 
         Returns
         -------
         Dict[str, Dict[int, float]]
-            Nested dictionary mapping driver IDs to their position probabilities.
-            First level key: driver ID (str)
-            Second level key: position (int, 1-based)
-            Values: probability of driver finishing in that position (float)
-
-        Examples
-        --------
-        >>> probs = converter.calculate_position_probabilities()
-        >>> print(probs["VER"])  # Get all probabilities for VER
-        {1: 0.55, 2: 0.25, 3: 0.15, ...}
-        >>> print(probs["VER"][1])  # Get probability of VER finishing 1st
-        0.55
+            A nested dictionary mapping driver IDs to dictionaries mapping grid positions
+            (1-indexed) to probabilities.
         """
-        return {
-            driver: {
-                pos + 1: float(self.position_probs[i, pos])
-                for pos in range(self.num_drivers)
-            }
-            for i, driver in enumerate(self.drivers)
-        }
+        B = self._compute_baseline()
+        P = self._adjust_by_markets(B)
+        Q = self._iterative_proportional_fitting(P)
+        result = {}
+        for i, driver in enumerate(self.drivers):
+            result[driver] = {}
+            for j in range(self.num_drivers):
+                result[driver][j + 1] = Q[i, j]
+        return result

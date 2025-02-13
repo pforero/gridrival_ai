@@ -5,9 +5,6 @@ This module provides a high-level interface for accessing driver position
 probabilities across different sessions.
 """
 
-from collections import defaultdict
-from dataclasses import dataclass, field
-
 from gridrival_ai.data.reference import CONSTRUCTORS
 from gridrival_ai.probabilities.driver_distributions import DriverDistribution
 from gridrival_ai.probabilities.types import JointProbabilities, SessionProbabilities

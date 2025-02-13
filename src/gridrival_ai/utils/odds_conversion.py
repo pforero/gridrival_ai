@@ -19,6 +19,7 @@ References
        for State-Contingent Claims.
 """
 
+import math
 import warnings
 from typing import List, Tuple
 
@@ -297,3 +298,118 @@ def power_method(
     probs = probs * (target_probability / probs.sum())
 
     return probs, k
+
+
+def harville_method(
+    odds: list[dict[str, float]],
+    target_market: float = 1.0,
+    epsilon: float = 1e-10,
+) -> dict[str, dict[int, float]]:
+    """
+    Calculate grid probabilities (marginal finishing position probabilities) using the Harville model.
+
+    The function assumes that the quoted odds for each driver come from a single market.
+    For example:
+      - If target_market==1.0 then the odds (accessed via key "1") represent finishing 1st or better.
+      - If target_market==6.0 then the odds (accessed via key "6") represent finishing 6th or better.
+
+    The function first converts odds to “strengths” (using basic_method) and then
+    uses a DP algorithm to compute the marginal probability for each finishing position.
+
+    Parameters
+    ----------
+    odds : List[Dict[str, float]]
+        Each dictionary must contain at least:
+            - driver_id: str
+            - a key matching the market (e.g. "1" or "6")
+    target_market : float, optional
+        The “market” number. For win odds use 1.0; for, say, “top‑6” odds use 6.0.
+        (Default is 1.0.)
+    epsilon : float, optional
+        A small number to avoid division by zero.
+
+    Returns
+    -------
+    Dict[str, Dict[int, float]]
+        A dictionary mapping each driver’s ID to another dictionary mapping finishing
+        positions (1-indexed) to probabilities. For example, with two drivers the result
+        may look like:
+
+            {
+                "VER": {1: 0.65, 2: 0.35},
+                "HAM": {1: 0.35, 2: 0.65},
+            }
+
+    Notes
+    -----
+    This implementation is based on the idea that if we have a set of drivers with strengths p,
+    then for any subset (represented by a bit mask) the probability that driver i is chosen
+    next is p[i] divided by the sum of p[j] over drivers in the subset.
+
+    The DP works as follows:
+
+      - Let n be the number of drivers.
+      - Represent a subset of available drivers as an integer bitmask.
+      - Initialize dp[full_mask] = 1.0.
+      - For each mask (iterating “backwards” from full_mask to 0), let
+            pos = n - (number of drivers available in mask) + 1.
+        For each driver i in the current mask, add:
+
+            result[i][pos] += dp[mask] * (p[i] / sum_{j in mask} p[j])
+
+        and “remove” driver i (i.e. update dp[new_mask]) with new_mask = mask without bit i.
+
+      - At the end, each driver’s probabilities (over positions 1..n) sum to 1 and for each finishing
+        position the probabilities over drivers sum to 1.
+    """
+    # Get driver IDs and number of drivers
+    driver_ids = [d["driver_id"] for d in odds]
+    n = len(driver_ids)
+
+    # Choose the correct market key.
+    # (If target_market is an integer, we look for key "1", "6", etc.)
+    if target_market == int(target_market):
+        market_key = str(int(target_market))
+    else:
+        market_key = str(target_market)
+
+    # Extract the odds for the given market.
+    market_odds = [d[market_key] for d in odds]
+
+    # Convert odds to “strengths” that sum to target_market.
+    strengths = basic_method(market_odds, target_market)
+
+    # dp[mask] will hold the probability of reaching that state.
+    # We use a list indexed by mask (an integer between 0 and 2^n - 1).
+    dp = [0.0] * (1 << n)
+    full_mask = (1 << n) - 1
+    dp[full_mask] = 1.0
+
+    # Initialize result dictionary: for each driver, create a dict for positions 1..n.
+    result = {
+        driver_id: {pos: 0.0 for pos in range(1, n + 1)} for driver_id in driver_ids
+    }
+
+    # Iterate over all masks from full_mask down to 0.
+    for mask in range(full_mask, -1, -1):
+        # Skip states with zero probability.
+        if dp[mask] == 0:
+            continue
+
+        # Build a list of indices for drivers still available in this state.
+        available = [i for i in range(n) if mask & (1 << i)]
+        if not available:
+            continue
+        # Sum of strengths for drivers available in this mask.
+        s = sum(strengths[i] for i in available)
+        # The finishing position we are about to assign:
+        pos = n - len(available) + 1  # positions are 1-indexed
+
+        # For each driver i available, assign the probability to finish in position pos.
+        for i in available:
+            p_i = strengths[i] / (s + epsilon)
+            prob = dp[mask] * p_i
+            result[driver_ids[i]][pos] += prob
+            new_mask = mask & ~(1 << i)
+            dp[new_mask] += prob
+    return result
