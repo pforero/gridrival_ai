@@ -155,11 +155,11 @@ class Distribution(ABC):
         """
         # Get all probabilities as a list
         probs_list = list(self.probabilities)
-        
+
         # If the distribution is empty, it's valid
         if not probs_list:
             return
-            
+
         total = sum(probs_list)
         if not math.isclose(total, 1.0, abs_tol=TOLERANCE):
             raise DistributionError(f"Probabilities must sum to 1.0 (got {total:.6f})")
@@ -405,7 +405,6 @@ class PositionDistribution(Distribution):
                 f"Filter resulted in empty distribution. No positions between {min_pos}"
                 f" and {max_pos}."
             )
-
 
         total = sum(filtered.values())
         normalized = {k: v / total for k, v in filtered.items()}
