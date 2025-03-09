@@ -54,7 +54,7 @@ def validate_percentage(value: float, name: str) -> None:
         raise ValidationError(f"{name} must be between 0.0 and 1.0, got {value}")
 
 
-def validate_positive_float(value: float, name: str) -> None:
+def validate_positive_float(value: float | int, name: str) -> None:
     """Validate float is positive.
 
     Parameters
@@ -69,7 +69,7 @@ def validate_positive_float(value: float, name: str) -> None:
     ValidationError
         If value is not positive
     """
-    if not isinstance(value, float):
+    if not isinstance(value, (int, float)):
         raise ValidationError(f"{name} must be a float")
     if value <= 0:
         raise ValidationError(f"{name} must be positive, got {value}")
@@ -101,6 +101,77 @@ class RaceFormat(Enum):
 
     STANDARD = auto()
     SPRINT = auto()
+
+
+@dataclass(frozen=True)
+class DriverPointsBreakdown:
+    """Detailed breakdown of driver points by component.
+
+    Parameters
+    ----------
+    qualifying : float
+        Points from qualifying position
+    race : float
+        Points from race finish position
+    sprint : float, optional
+        Points from sprint race, by default 0.0
+    overtake : float, optional
+        Points from positions gained, by default 0.0
+    improvement : float, optional
+        Points from beating rolling average, by default 0.0
+    teammate : float, optional
+        Points from beating teammate, by default 0.0
+    completion : float, optional
+        Points from race completion stages, by default 0.0
+
+    Attributes
+    ----------
+    total : float
+        Total points across all components
+
+    Examples
+    --------
+    >>> # Create a breakdown
+    >>> breakdown = DriverPointsBreakdown(
+    ...     qualifying=50.0,
+    ...     race=97.0,
+    ...     overtake=6.0,
+    ...     improvement=4.0,
+    ...     teammate=2.0,
+    ...     completion=12.0
+    ... )
+    >>> breakdown.qualifying
+    50.0
+    >>> breakdown.total  # Sum of all components
+    171.0
+    """
+
+    qualifying: float
+    race: float
+    sprint: float = 0.0
+    overtake: float = 0.0
+    improvement: float = 0.0
+    teammate: float = 0.0
+    completion: float = 0.0
+
+    @property
+    def total(self) -> float:
+        """Calculate total points across all components.
+
+        Returns
+        -------
+        float
+            Total points
+        """
+        return (
+            self.qualifying
+            + self.race
+            + self.sprint
+            + self.overtake
+            + self.improvement
+            + self.teammate
+            + self.completion
+        )
 
 
 @dataclass(frozen=True)
@@ -171,7 +242,7 @@ class DriverWeekendData:
         object.__setattr__(self, "format", format)
         object.__setattr__(self, "positions", positions)
         object.__setattr__(self, "completion_percentage", completion_percentage)
-        object.__setattr__(self, "rolling_average", rolling_average)
+        object.__setattr__(self, "rolling_average", float(rolling_average))
         object.__setattr__(self, "teammate_position", teammate_position)
 
 

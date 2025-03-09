@@ -49,6 +49,9 @@ DEFAULT_TEAMMATE_POINTS = {
     20: 12,  # >12 positions ahead
 }
 
+# Default completion stage thresholds (25%, 50%, 75%, 90%)
+DEFAULT_COMPLETION_THRESHOLDS = [0.25, 0.5, 0.75, 0.9]
+
 # Default values for other scoring parameters
 DEFAULT_COMPLETION_STAGE_POINTS = 3.0
 DEFAULT_OVERTAKE_MULTIPLIER = 3.0
@@ -109,6 +112,15 @@ CONFIG_SCHEMA = {
             "type": "number",
             "minimum": MIN_POINTS,
             "maximum": MAX_POINTS,
+        },
+        "completion_thresholds": {
+            "type": "array",
+            "items": {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 1.0,
+            },
+            "minItems": 1,
         },
         "overtake_multiplier": {
             "type": "number",
