@@ -10,7 +10,7 @@ point calculations.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Union
+from typing import Dict, Optional
 
 import numpy as np
 

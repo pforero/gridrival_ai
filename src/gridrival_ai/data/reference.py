@@ -3,7 +3,6 @@
 This module contains static data about F1 drivers, constructors, and races.
 """
 
-from dataclasses import dataclass
 from typing import Literal
 
 from gridrival_ai.data.models import Constructor, Driver, Race
