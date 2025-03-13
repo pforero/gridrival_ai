@@ -13,7 +13,7 @@ from gridrival_ai.points.constructor import ConstructorPointsCalculator
 from gridrival_ai.points.distributions import DistributionAdapter
 from gridrival_ai.points.driver import DriverPointsCalculator
 from gridrival_ai.probabilities.registry import DistributionRegistry
-from gridrival_ai.scoring.calculator import Scorer
+from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.types import RaceFormat
 
 
@@ -26,7 +26,7 @@ class PointsCalculator:
 
     Parameters
     ----------
-    scorer : Scorer
+    scorer : ScoringCalculator
         Scoring rules calculator
     probability_registry : DistributionRegistry
         Registry containing probability distributions
@@ -36,10 +36,10 @@ class PointsCalculator:
     Examples
     --------
     >>> from gridrival_ai.probabilities.registry import DistributionRegistry
-    >>> from gridrival_ai.scoring.calculator import Scorer
+    >>> from gridrival_ai.scoring.calculator import ScoringCalculator
     >>>
     >>> registry = DistributionRegistry()
-    >>> scorer = Scorer(config)
+    >>> scorer = ScoringCalculator(config)
     >>> driver_stats = {"VER": 1.5, "PER": 3.2}
     >>>
     >>> calculator = PointsCalculator(scorer, registry, driver_stats)
@@ -49,7 +49,7 @@ class PointsCalculator:
 
     def __init__(
         self,
-        scorer: Scorer,
+        scorer: ScoringCalculator,
         probability_registry: DistributionRegistry,
         driver_stats: Dict[str, float],
     ):

@@ -15,7 +15,7 @@ from gridrival_ai.points.components import (
     TeammatePointsCalculator,
 )
 from gridrival_ai.points.distributions import DistributionAdapter
-from gridrival_ai.scoring.calculator import Scorer
+from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.types import RaceFormat
 
 
@@ -30,7 +30,7 @@ class DriverPointsCalculator:
     ----------
     distributions : DistributionAdapter
         Adapter for accessing probability distributions
-    scorer : Scorer
+    scorer : ScoringCalculator
         Scoring rules calculator
 
     Examples
@@ -47,7 +47,7 @@ class DriverPointsCalculator:
     Total expected points: 156.5
     """
 
-    def __init__(self, distributions: DistributionAdapter, scorer: Scorer):
+    def __init__(self, distributions: DistributionAdapter, scorer: ScoringCalculator):
         """Initialize with distributions and scorer."""
         self.distributions = distributions
         self.scorer = scorer

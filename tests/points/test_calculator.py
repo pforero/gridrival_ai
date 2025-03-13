@@ -15,7 +15,7 @@ from gridrival_ai.points.constructor import ConstructorPointsCalculator
 from gridrival_ai.points.distributions import DistributionAdapter
 from gridrival_ai.points.driver import DriverPointsCalculator
 from gridrival_ai.probabilities.registry import DistributionRegistry
-from gridrival_ai.scoring.calculator import Scorer
+from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.types import RaceFormat
 
 
@@ -28,7 +28,7 @@ def mock_registry():
 @pytest.fixture
 def mock_scorer():
     """Create a mock scorer."""
-    return MagicMock(spec=Scorer)
+    return MagicMock(spec=ScoringCalculator)
 
 
 @pytest.fixture

@@ -13,7 +13,7 @@ import pytest
 from gridrival_ai.points.constructor import ConstructorPointsCalculator
 from gridrival_ai.points.distributions import DistributionAdapter
 from gridrival_ai.probabilities.core import PositionDistribution
-from gridrival_ai.scoring.calculator import Scorer
+from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.types import RaceFormat
 
 
@@ -23,13 +23,13 @@ def mock_adapter():
     adapter = MagicMock(spec=DistributionAdapter)
 
     # Set up the get_constructor_drivers method to return fixed drivers
-    adapter.get_constructor_drivers.return_value = ("VER", "PER")
+    adapter.get_constructor_drivers.return_value = ("VER", "LAW")
 
     # Mock position distributions
     ver_qual = PositionDistribution({1: 0.7, 2: 0.2, 3: 0.1})
-    per_qual = PositionDistribution({3: 0.3, 4: 0.4, 5: 0.3})
+    law_qual = PositionDistribution({3: 0.3, 4: 0.4, 5: 0.3})
     ver_race = PositionDistribution({1: 0.6, 2: 0.3, 3: 0.1})
-    per_race = PositionDistribution({3: 0.2, 4: 0.5, 5: 0.3})
+    law_race = PositionDistribution({3: 0.2, 4: 0.5, 5: 0.3})
 
     # Configure adapter to return position distributions
     def get_position_distribution(driver_id, session):
@@ -37,10 +37,10 @@ def mock_adapter():
             return ver_qual
         elif driver_id == "VER" and session == "race":
             return ver_race
-        elif driver_id == "PER" and session == "qualifying":
-            return per_qual
-        elif driver_id == "PER" and session == "race":
-            return per_race
+        elif driver_id == "LAW" and session == "qualifying":
+            return law_qual
+        elif driver_id == "LAW" and session == "race":
+            return law_race
         else:
             raise KeyError(f"No distribution for {driver_id} in {session}")
 
@@ -52,7 +52,7 @@ def mock_adapter():
 @pytest.fixture
 def mock_scorer():
     """Create a mock scorer with predefined scoring tables."""
-    scorer = MagicMock(spec=Scorer)
+    scorer = MagicMock(spec=ScoringCalculator)
 
     # Constructor points tables (qualifying and race)
     # Using 0-indexed arrays where index 0 is reserved (not used)
@@ -134,7 +134,7 @@ def test_missing_driver_distribution(mock_adapter, mock_scorer):
     original_side_effect = mock_adapter.get_position_distribution.side_effect
 
     def modified_get_position(driver_id, session):
-        if driver_id == "PER":
+        if driver_id == "LAW":
             raise KeyError(f"No distribution for {driver_id}")
         return original_side_effect(driver_id, session)
 
