@@ -44,6 +44,35 @@ class TestDistributionFactory:
         # Should sum to 1.0
         assert sum(dist.position_probs.values()) == pytest.approx(1.0)
 
+    def test_from_odds_dict(self):
+        """Test creating distributions from odds dictionary."""
+        # Sample odds dictionary
+        odds_dict = {"VER": 1.5, "HAM": 3.0, "NOR": 6.0}
+
+        # Create distributions
+        distributions = DistributionFactory.from_odds_dict(odds_dict)
+
+        # Should have distributions for all drivers
+        assert set(distributions.keys()) == {"VER", "HAM", "NOR"}
+
+        # Should be position distributions
+        assert isinstance(distributions["VER"], PositionDistribution)
+        assert isinstance(distributions["HAM"], PositionDistribution)
+        assert isinstance(distributions["NOR"], PositionDistribution)
+
+        # Each distribution should be valid
+        for dist in distributions.values():
+            assert dist.is_valid
+
+        # Lower odds should have higher win probability
+        assert (
+            distributions["VER"][1] > distributions["HAM"][1] > distributions["NOR"][1]
+        )
+
+        # Sum of P1 probabilities should be close to 1.0 for Harville method
+        p1_sum = sum(dist[1] for dist in distributions.values())
+        assert p1_sum == pytest.approx(1.0)
+
     def test_from_probabilities(self):
         """Test creating distribution from probabilities."""
         probs = {1: 0.6, 2: 0.4}
@@ -66,6 +95,40 @@ class TestDistributionFactory:
         dist = DistributionFactory.from_probabilities(probs, validate=False)
         assert dist[1] == 0.6
         assert dist[2] == 0.2
+
+    def test_from_probabilities_dict(self):
+        """Test creating distributions from probabilities dictionary."""
+        # Sample probabilities dictionary
+        probs_dict = {
+            "VER": {1: 0.6, 2: 0.3, 3: 0.1},
+            "HAM": {1: 0.3, 2: 0.5, 3: 0.2},
+            "NOR": {1: 0.1, 2: 0.2, 3: 0.7},
+        }
+
+        # Create distributions
+        distributions = DistributionFactory.from_probabilities_dict(probs_dict)
+
+        # Should have distributions for all drivers
+        assert set(distributions.keys()) == {"VER", "HAM", "NOR"}
+
+        # Should be position distributions
+        assert isinstance(distributions["VER"], PositionDistribution)
+        assert isinstance(distributions["HAM"], PositionDistribution)
+        assert isinstance(distributions["NOR"], PositionDistribution)
+
+        # Each distribution should be valid
+        for dist in distributions.values():
+            assert dist.is_valid
+
+        # Should have the original probabilities
+        assert distributions["VER"][1] == 0.6
+        assert distributions["HAM"][2] == 0.5
+        assert distributions["NOR"][3] == 0.7
+
+        # Positions not specified should have zero probability
+        assert distributions["VER"][4] == 0.0
+        assert distributions["HAM"][4] == 0.0
+        assert distributions["NOR"][4] == 0.0
 
     def test_from_json_position(self):
         """Test creating position distribution from JSON."""
