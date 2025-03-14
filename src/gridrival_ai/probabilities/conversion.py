@@ -542,7 +542,7 @@ class HarvilleConverter(OddsConverter):
         # Convert odds to "strengths" using basic method
         strengths = self.convert(odds, target_sum=1.0)
 
-        # Initialize result dictionary
+        # Initialize result dictionary with empty dicts for each driver
         result = {driver_id: {} for driver_id in driver_ids}
 
         # dp[mask] holds the probability of reaching that state
@@ -570,7 +570,14 @@ class HarvilleConverter(OddsConverter):
             for i in available:
                 p_i = strengths[i] / (s + self.epsilon)
                 prob = dp[mask] * p_i
-                result[driver_ids[i]][pos] = prob
+
+                # Initialize position probability if it doesn't exist
+                if pos not in result[driver_ids[i]]:
+                    result[driver_ids[i]][pos] = 0
+
+                # Accumulate the probability instead of just assigning
+                result[driver_ids[i]][pos] += prob
+
                 new_mask = mask & ~(1 << i)
                 dp[new_mask] += prob
 

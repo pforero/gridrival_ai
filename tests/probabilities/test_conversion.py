@@ -199,6 +199,44 @@ class TestHarvilleConverter:
         expected = np.array([1 / 1.5, 1 / 3.0]) / (1 / 1.5 + 1 / 3.0)
         assert np.allclose(probs, expected)
 
+    def test_convert_to_grid_three_drivers(self):
+        """Test conversion to grid with three drivers to catch accumulation issues."""
+        converter = HarvilleConverter()
+        odds = [1.5, 3.0, 6.0]
+        grid = converter.convert_to_grid(odds, ["VER", "HAM", "NOR"])
+
+        # Check grid structure
+        assert set(grid.keys()) == {"VER", "HAM", "NOR"}
+        assert set(grid["VER"].keys()) == {1, 2, 3}
+        assert set(grid["HAM"].keys()) == {1, 2, 3}
+        assert set(grid["NOR"].keys()) == {1, 2, 3}
+
+        # Check probabilities sum to EXACTLY 1.0 for each driver (strict tolerance)
+        for driver in grid:
+            driver_sum = sum(grid[driver].values())
+            assert driver_sum == pytest.approx(
+                1.0, abs=1e-9
+            ), f"Sum for {driver}: {driver_sum}"
+
+        # Check probabilities sum to EXACTLY 1.0 for each position (strict tolerance)
+        for pos in range(1, 4):
+            pos_sum = sum(grid[driver][pos] for driver in grid if pos in grid[driver])
+            assert pos_sum == pytest.approx(
+                1.0, abs=1e-9
+            ), f"Sum for position {pos}: {pos_sum}"
+
+        # Check expected ordering patterns (lower odds → higher probability of better
+        # positions)
+        assert grid["VER"][1] > grid["HAM"][1] > grid["NOR"][1]  # Order in P1
+        assert grid["NOR"][3] > grid["HAM"][3] > grid["VER"][3]  # Order in P3
+
+        # Verify consistent transition probabilities
+        # With exponential decay in position probabilities:
+        # - First driver (lowest odds) should have P1 > P2 > P3
+        # - Last driver (highest odds) should have P3 > P2 > P1
+        assert grid["VER"][1] > grid["VER"][2] > grid["VER"][3]
+        assert grid["NOR"][3] > grid["NOR"][2] > grid["NOR"][1]
+
     def test_convert_to_grid(self):
         """Test conversion to full grid."""
         converter = HarvilleConverter()
