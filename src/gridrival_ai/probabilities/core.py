@@ -48,7 +48,7 @@ DistributionMapping = Dict[OutcomeType, float]
 JointMapping = Dict[JointOutcomeType, float]
 
 # Constants
-TOLERANCE = 1e-9
+TOLERANCE = 1e-6
 MAX_POSITION = 20
 
 

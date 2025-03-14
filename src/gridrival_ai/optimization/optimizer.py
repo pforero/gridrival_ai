@@ -183,7 +183,7 @@ class TeamOptimizer:
                     best_solution=None,
                     alternative_solutions=[],
                     remaining_budget=self.budget,
-                    error_message="Optimization failed: No valid team composition found"
+                    error_message="Optimization failed: No valid team composition found",
                 )
 
             remaining = self.budget - best_solution.total_cost
