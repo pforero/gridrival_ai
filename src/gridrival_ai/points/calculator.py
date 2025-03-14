@@ -6,6 +6,7 @@ based on probability distributions. It orchestrates the driver and constructor
 calculators and handles the integration with team data.
 """
 
+from types import SimpleNamespace
 from typing import Dict
 
 from gridrival_ai.data.reference import CONSTRUCTORS
@@ -143,3 +144,15 @@ class PointsCalculator:
         return self.constructor_calculator.calculate(
             constructor_id=constructor_id, race_format=race_format
         )
+
+    @property
+    def tables(self):
+        """
+        Get scoring tables with attribute-style access.
+
+        Returns
+        -------
+        SimpleNamespace
+            Object for accessing tables via attributes
+        """
+        return SimpleNamespace(**self.engine.tables)
