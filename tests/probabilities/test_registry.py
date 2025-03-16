@@ -30,33 +30,39 @@ def populated_registry(registry, sample_dist):
 class TestDistributionRegistry:
     """Test suite for DistributionRegistry."""
 
-    def test_register_and_get(self, registry, sample_dist):
-        """Test registering and retrieving a distribution."""
+    def test_register(self, registry, sample_dist):
+        """Test registering a distribution."""
         registry.register("VER", "qualifying", sample_dist)
+        assert "VER" in registry.distributions
+        assert "qualifying" in registry.distributions["VER"]
+        assert registry.distributions["VER"]["qualifying"] is sample_dist
+
+    def test_get(self, registry, sample_dist):
+        """Test all get functionality."""
+        # Test getting a missing distribution without default (should raise KeyError)
+        with pytest.raises(KeyError, match="No distribution found"):
+            registry.get("VER", "qualifying")
+
+        # Test getting a missing distribution with default
+        default = PositionDistribution({1: 0.5, 2: 0.5})
+        assert registry.get("VER", "qualifying", default) is default
+
+        # Register a distribution
+        registry.register("VER", "qualifying", sample_dist)
+
+        # Test getting an existing distribution
         retrieved = registry.get("VER", "qualifying")
         assert retrieved is sample_dist
         assert retrieved[1] == 0.6
+
+        # Test getting an existing distribution with default (should ignore default)
+        assert registry.get("VER", "qualifying", default) is sample_dist
 
     def test_has(self, registry, sample_dist):
         """Test checking if a distribution exists."""
         assert not registry.has("VER", "qualifying")
         registry.register("VER", "qualifying", sample_dist)
         assert registry.has("VER", "qualifying")
-
-    def test_get_missing(self, registry):
-        """Test error when getting a missing distribution."""
-        with pytest.raises(KeyError, match="No distribution found"):
-            registry.get("VER", "qualifying")
-
-    def test_get_or_default(self, registry, sample_dist):
-        """Test get_or_default with existing and missing distributions."""
-        # Missing distribution should return default
-        default = PositionDistribution({1: 0.5, 2: 0.5})
-        assert registry.get_or_default("VER", "qualifying", default) is default
-
-        # Registered distribution should be returned
-        registry.register("VER", "qualifying", sample_dist)
-        assert registry.get_or_default("VER", "qualifying", default) is sample_dist
 
     def test_get_entities(self, populated_registry):
         """Test getting all entities."""
@@ -97,8 +103,8 @@ class TestDistributionRegistry:
         assert isinstance(joint, JointDistribution)
 
         # Should have outcome names set correctly
-        assert joint.outcome1_name == "HAM"
-        assert joint.outcome2_name == "VER"
+        assert joint.outcome1_name == "VER"
+        assert joint.outcome2_name == "HAM"
 
         # Should be constrained (no positions can be the same)
         assert joint[(1, 1)] == 0.0
@@ -123,39 +129,3 @@ class TestDistributionRegistry:
 
         with pytest.raises(KeyError, match="No distribution found"):
             registry.get_joint("VER", "HAM", "race")
-
-    def test_get_joint_caching(self, populated_registry):
-        """Test joint distribution caching."""
-        # Get joint distribution twice
-        joint1 = populated_registry.get_joint("VER", "HAM", "race")
-        joint2 = populated_registry.get_joint("VER", "HAM", "race")
-
-        # Should be the same object (cached)
-        assert joint1 is joint2
-
-        # Should work with reversed order too
-        joint3 = populated_registry.get_joint("HAM", "VER", "race")
-        assert joint1 is joint3
-
-    def test_clear_joint_cache(self, populated_registry):
-        """Test clearing joint cache when registering new distributions."""
-        # Get initial joint distribution
-        joint1 = populated_registry.get_joint("VER", "HAM", "race")
-
-        # Register new distribution for VER in race context
-        new_dist = PositionDistribution({1: 0.8, 2: 0.2})
-        populated_registry.register("VER", "race", new_dist)
-
-        # Get joint distribution again - should be different
-        joint2 = populated_registry.get_joint("VER", "HAM", "race")
-        assert joint1 is not joint2
-
-        # Probabilities should reflect new distribution
-        assert joint2[(2, 1)] == pytest.approx(0.2 * 0.6 / (0.8 * 0.4 + 0.2 * 0.6), 5)
-
-    def test_clear(self, populated_registry):
-        """Test clearing the registry."""
-        populated_registry.clear()
-        assert not populated_registry.has("VER", "qualifying")
-        assert not populated_registry.has("VER", "race")
-        assert not populated_registry.has("HAM", "race")

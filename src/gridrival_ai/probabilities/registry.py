@@ -32,9 +32,8 @@ Examples
 
 from __future__ import annotations
 
-import warnings
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, cast
+from typing import Dict, List, Optional
 
 from gridrival_ai.probabilities.core import (
     Distribution,
@@ -57,8 +56,6 @@ class DistributionRegistry:
     ----------
     distributions : Dict[str, Dict[str, Distribution]]
         Nested dictionary storing distributions by entity ID and context.
-    joint_distributions : Dict[Tuple[str, str, str], JointDistribution]
-        Dictionary storing joint distributions by entity pair and context.
 
     Examples
     --------
@@ -71,9 +68,6 @@ class DistributionRegistry:
     """
 
     distributions: Dict[str, Dict[str, Distribution]] = field(default_factory=dict)
-    joint_distributions: Dict[Tuple[str, str, str], JointDistribution] = field(
-        default_factory=dict
-    )
 
     def register(
         self, entity_id: str, context: str, distribution: Distribution
@@ -104,51 +98,11 @@ class DistributionRegistry:
         # Register distribution
         self.distributions[entity_id][context] = distribution
 
-        # Clear any cached joint distributions involving this entity and context
-        self._clear_joint_cache(entity_id, context)
-
-    def get(self, entity_id: str, context: str) -> Distribution:
+    def get(
+        self, entity_id: str, context: str, default: Optional[Distribution] = None
+    ) -> Distribution:
         """
         Get distribution for an entity and context.
-
-        Parameters
-        ----------
-        entity_id : str
-            ID of the entity (e.g., driver or constructor code).
-        context : str
-            Context for the distribution (e.g., 'qualifying', 'race').
-
-        Returns
-        -------
-        Distribution
-            Probability distribution for the entity and context.
-
-        Raises
-        ------
-        KeyError
-            If no distribution is found for the entity and context.
-
-        Examples
-        --------
-        >>> registry = DistributionRegistry()
-        >>> # Assume distribution has been registered
-        >>> dist = registry.get("VER", "qualifying")
-        >>> dist[1]  # Probability of P1
-        0.6
-        """
-        try:
-            return self.distributions[entity_id][context]
-        except KeyError:
-            raise KeyError(
-                f"No distribution found for entity '{entity_id}' and context "
-                f"'{context}'"
-            )
-
-    def get_or_default(
-        self, entity_id: str, context: str, default: Optional[Distribution] = None
-    ) -> Optional[Distribution]:
-        """
-        Get distribution for an entity and context or return default.
 
         Parameters
         ----------
@@ -161,21 +115,40 @@ class DistributionRegistry:
 
         Returns
         -------
-        Optional[Distribution]
-            Probability distribution for the entity and context or default.
+        Distribution
+            Probability distribution for the entity and context.
+
+        Raises
+        ------
+        KeyError
+            If no distribution is found for the entity and context and no default is
+            provided.
 
         Examples
         --------
         >>> registry = DistributionRegistry()
-        >>> # No distribution has been registered
-        >>> dist = registry.get_or_default("VER", "qualifying")
-        >>> dist is None
-        True
+        >>> # Assume distribution has been registered
+        >>> dist = registry.get("VER", "qualifying")
+        >>> dist[1]  # Probability of P1
+        0.6
+        >>>
+        >>> # With default value
+        >>> dist = (
+            registry
+            .get("NOR", "qualifying", default=PositionDistribution({1: 0.1}))
+        )
+        >>> dist[1]
+        0.1
         """
         try:
-            return self.get(entity_id, context)
+            return self.distributions[entity_id][context]
         except KeyError:
-            return default
+            if default is not None:
+                return default
+            raise KeyError(
+                f"No distribution found for entity '{entity_id}' and context "
+                f"'{context}'"
+            )
 
     def get_joint(
         self,
@@ -187,8 +160,7 @@ class DistributionRegistry:
         """
         Get joint distribution between two entities for a context.
 
-        If the joint distribution does not exist, it is created from the
-        individual distributions assuming independence.
+        Creates a joint distribution from the individual distributions.
 
         Parameters
         ----------
@@ -221,49 +193,23 @@ class DistributionRegistry:
         >>> joint[(1, 2)]  # Probability VER P1, HAM P2
         0.4
         """
-        # Standardize entity order to ensure consistent caching
-        if entity1_id > entity2_id:
-            entity1_id, entity2_id = entity2_id, entity1_id
-
-        # Create key for cache
-        cache_key = (entity1_id, entity2_id, context)
-
-        # Check if joint distribution is already cached
-        if cache_key in self.joint_distributions:
-            return self.joint_distributions[cache_key]
-
         # Get individual distributions
         dist1 = self.get(entity1_id, context)
         dist2 = self.get(entity2_id, context)
 
-        # Convert to position distributions (required for constraints)
-        if constrained and not (
-            isinstance(dist1, PositionDistribution)
+        # Create joint distribution based on constraint requirement
+        if (
+            constrained
+            and isinstance(dist1, PositionDistribution)
             and isinstance(dist2, PositionDistribution)
         ):
-            warnings.warn(
-                "Constrained joint distributions only supported for "
-                "PositionDistribution. Falling back to independent joint distribution."
-            )
-            constrained = False
-
-        # Create joint distribution
-        if constrained:
-            joint = create_constrained_joint(
-                cast(PositionDistribution, dist1),
-                cast(PositionDistribution, dist2),
-                name1=entity1_id,
-                name2=entity2_id,
-            )
-        else:
-            joint = create_independent_joint(
+            return create_constrained_joint(
                 dist1, dist2, name1=entity1_id, name2=entity2_id
             )
-
-        # Cache the joint distribution
-        self.joint_distributions[cache_key] = joint
-
-        return joint
+        else:
+            return create_independent_joint(
+                dist1, dist2, name1=entity1_id, name2=entity2_id
+            )
 
     def has(self, entity_id: str, context: str) -> bool:
         """
@@ -388,24 +334,3 @@ class DistributionRegistry:
         False
         """
         self.distributions.clear()
-        self.joint_distributions.clear()
-
-    def _clear_joint_cache(self, entity_id: str, context: str) -> None:
-        """
-        Clear joint distribution cache for an entity and context.
-
-        Parameters
-        ----------
-        entity_id : str
-            ID of the entity.
-        context : str
-            Context for the distribution.
-        """
-        # Remove joint distributions involving this entity and context
-        keys_to_remove = [
-            key
-            for key in self.joint_distributions
-            if (key[0] == entity_id or key[1] == entity_id) and key[2] == context
-        ]
-        for key in keys_to_remove:
-            del self.joint_distributions[key]
