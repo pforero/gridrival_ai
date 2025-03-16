@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple, cast
+from typing import Dict, List, Optional, Tuple, cast
 
 from gridrival_ai.probabilities.core import (
     Distribution,
@@ -59,8 +59,6 @@ class DistributionRegistry:
         Nested dictionary storing distributions by entity ID and context.
     joint_distributions : Dict[Tuple[str, str, str], JointDistribution]
         Dictionary storing joint distributions by entity pair and context.
-    disabled_entities : Set[str]
-        Set of entity IDs that are disabled (e.g., retired drivers).
 
     Examples
     --------
@@ -76,7 +74,6 @@ class DistributionRegistry:
     joint_distributions: Dict[Tuple[str, str, str], JointDistribution] = field(
         default_factory=dict
     )
-    disabled_entities: Set[str] = field(default_factory=set)
 
     def register(
         self, entity_id: str, context: str, distribution: Distribution
@@ -100,11 +97,6 @@ class DistributionRegistry:
         >>> dist = PositionDistribution({1: 0.6, 2: 0.4})
         >>> registry.register("VER", "qualifying", dist)
         """
-        if entity_id in self.disabled_entities:
-            warnings.warn(
-                f"Entity {entity_id} is disabled but registering a distribution anyway."
-            )
-
         # Create dictionary for entity if it doesn't exist
         if entity_id not in self.distributions:
             self.distributions[entity_id] = {}
@@ -144,9 +136,6 @@ class DistributionRegistry:
         >>> dist[1]  # Probability of P1
         0.6
         """
-        if entity_id in self.disabled_entities:
-            warnings.warn(f"Retrieving distribution for disabled entity {entity_id}")
-
         try:
             return self.distributions[entity_id][context]
         except KeyError:
@@ -232,13 +221,6 @@ class DistributionRegistry:
         >>> joint[(1, 2)]  # Probability VER P1, HAM P2
         0.4
         """
-        # Check for disabled entities
-        for entity_id in [entity1_id, entity2_id]:
-            if entity_id in self.disabled_entities:
-                warnings.warn(
-                    f"Using disabled entity {entity_id} in joint distribution"
-                )
-
         # Standardize entity order to ensure consistent caching
         if entity1_id > entity2_id:
             entity1_id, entity2_id = entity2_id, entity1_id
@@ -389,43 +371,6 @@ class DistributionRegistry:
             return []
 
         return sorted(self.distributions[entity_id].keys())
-
-    def disable_entity(self, entity_id: str) -> None:
-        """
-        Disable an entity.
-
-        Disabled entities will generate warnings when accessed but are still
-        available. This is useful for entities that are no longer active
-        (e.g., retired drivers) but whose distributions may still be needed.
-
-        Parameters
-        ----------
-        entity_id : str
-            ID of the entity to disable.
-
-        Examples
-        --------
-        >>> registry = DistributionRegistry()
-        >>> registry.disable_entity("VET")  # Retired driver
-        """
-        self.disabled_entities.add(entity_id)
-
-    def enable_entity(self, entity_id: str) -> None:
-        """
-        Enable a previously disabled entity.
-
-        Parameters
-        ----------
-        entity_id : str
-            ID of the entity to enable.
-
-        Examples
-        --------
-        >>> registry = DistributionRegistry()
-        >>> registry.disable_entity("ALO")
-        >>> registry.enable_entity("ALO")  # Back from retirement!
-        """
-        self.disabled_entities.discard(entity_id)
 
     def clear(self) -> None:
         """

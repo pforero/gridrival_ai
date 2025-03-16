@@ -153,34 +153,6 @@ class TestDistributionRegistry:
         # Probabilities should reflect new distribution
         assert joint2[(2, 1)] == pytest.approx(0.2 * 0.6 / (0.8 * 0.4 + 0.2 * 0.6), 5)
 
-    def test_disable_entity(self, populated_registry):
-        """Test disabling an entity."""
-        # Disable VER
-        populated_registry.disable_entity("VER")
-
-        # Should still be able to get distributions but with warning
-        with pytest.warns(UserWarning, match="disabled entity"):
-            dist = populated_registry.get("VER", "qualifying")
-            assert dist[1] == 0.6
-
-        # Should warn when registering for disabled entity
-        with pytest.warns(UserWarning, match="disabled but registering"):
-            populated_registry.register("VER", "sprint", PositionDistribution({1: 1.0}))
-
-        # Should warn for joint distributions with disabled entity
-        with pytest.warns(UserWarning, match="disabled entity"):
-            populated_registry.get_joint("VER", "HAM", "race")
-
-    def test_enable_entity(self, populated_registry):
-        """Test enabling a previously disabled entity."""
-        # Disable then enable
-        populated_registry.disable_entity("VER")
-        populated_registry.enable_entity("VER")
-
-        # Should be able to get without warning
-        dist = populated_registry.get("VER", "qualifying")
-        assert dist[1] == 0.6
-
     def test_clear(self, populated_registry):
         """Test clearing the registry."""
         populated_registry.clear()
