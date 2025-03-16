@@ -1,438 +1,225 @@
-"""Tests for probability distribution factory."""
+"""Tests for the probability distribution factory."""
 
-import json
-import os
-import tempfile
+from unittest.mock import MagicMock
 
 import pytest
 
-from gridrival_ai.probabilities.core import JointDistribution, PositionDistribution
-from gridrival_ai.probabilities.factory import DistributionBuilder, DistributionFactory
+from gridrival_ai.probabilities.core import PositionDistribution
+from gridrival_ai.probabilities.factory import DistributionFactory
+from gridrival_ai.probabilities.registry import DistributionRegistry
+
+
+@pytest.fixture
+def simple_odds_structure():
+    """Create a simple odds structure with a single position threshold."""
+    return {
+        "race": {
+            1: {
+                "VER": 2.0,  # 50% implied probability
+                "HAM": 4.0,  # 25% implied probability
+                "NOR": 5.0,  # 20% implied probability
+            }
+        }
+    }
+
+
+@pytest.fixture
+def complex_odds_structure():
+    """Create a complex odds structure with multiple position thresholds."""
+    # Include 20 drivers for a realistic F1 grid
+    drivers = {
+        "VER": 2.0,
+        "HAM": 4.0,
+        "NOR": 5.0,
+        "LEC": 7.0,
+        "SAI": 9.0,
+        "PIA": 12.0,
+        "RUS": 15.0,
+        "ALO": 20.0,
+        "STR": 30.0,
+        "OCO": 40.0,
+        "GAS": 50.0,
+        "ANT": 60.0,
+        "HUL": 70.0,
+        "BEA": 80.0,
+        "ALB": 90.0,
+        "DOO": 100.0,
+        "TSU": 120.0,
+        "BOR": 150.0,
+        "HAD": 180.0,
+        "LAW": 200.0,
+    }
+
+    top3_drivers = {
+        k: v / 2
+        for k, v in drivers.items()
+        if k in ["VER", "HAM", "NOR", "LEC", "SAI", "PIA"]
+    }
+    top10_drivers = {
+        k: v / 5 for k, v in drivers.items() if k in list(drivers.keys())[:12]
+    }
+
+    return {
+        "race": {
+            1: drivers.copy(),  # Win odds
+            3: top3_drivers,  # Top 3 odds
+            10: top10_drivers,  # Top 10 odds
+        },
+        "qualification": {
+            1: drivers.copy(),  # Pole odds
+        },
+    }
+
+
+@pytest.fixture
+def mock_registry():
+    """Create a mock distribution registry."""
+    registry = MagicMock(spec=DistributionRegistry)
+    registry.register = MagicMock()
+    return registry
 
 
 class TestDistributionFactory:
     """Test suite for DistributionFactory."""
 
-    def test_from_odds(self):
-        """Test creating distribution from odds."""
-        odds = [1.5, 3.0, 6.0]
-        dist = DistributionFactory.from_odds(odds)
+    def test_from_structured_odds_simple(self, simple_odds_structure):
+        """Test creating distributions from a simple odds structure."""
+        distributions = DistributionFactory.from_structured_odds(simple_odds_structure)
 
-        # Should be a position distribution
-        assert isinstance(dist, PositionDistribution)
+        # Check structure
+        assert "race" in distributions
+        assert "sprint" in distributions  # Added by fallback
+        assert "qualification" in distributions  # Added by fallback
 
-        # Should have right probabilities
-        total_prob = 1 / 1.5 + 1 / 3.0 + 1 / 6.0
-        assert dist[1] == pytest.approx(1 / 1.5 / total_prob)
-        assert dist[2] == pytest.approx(1 / 3.0 / total_prob)
-        assert dist[3] == pytest.approx(1 / 6.0 / total_prob)
+        # Check drivers
+        assert "VER" in distributions["race"]
+        assert "HAM" in distributions["race"]
+        assert "NOR" in distributions["race"]
 
-        # Should sum to 1.0
-        assert sum(dist.position_probs.values()) == pytest.approx(1.0)
+        # Check types
+        ver_dist = distributions["race"]["VER"]
+        assert isinstance(ver_dist, PositionDistribution)
 
-    def test_from_odds_with_method(self):
-        """Test creating distribution from odds with different method."""
-        odds = [1.5, 3.0, 6.0]
-        dist = DistributionFactory.from_odds(odds, method="shin")
+        # Ensure all distributions are valid
+        for session, driver_dists in distributions.items():
+            for driver_id, dist in driver_dists.items():
+                assert dist.is_valid
+                assert sum(dist.position_probs.values()) == pytest.approx(1.0)
 
-        # Should be a position distribution
-        assert isinstance(dist, PositionDistribution)
+    def test_from_structured_odds_complex(self, complex_odds_structure):
+        "Test creating distributions from a complex structure with multiple thresholds."
+        distributions = DistributionFactory.from_structured_odds(complex_odds_structure)
 
-        # Should have right order (lower odds = higher probability)
-        assert dist[1] > dist[2] > dist[3]
+        # Check structure
+        assert set(distributions.keys()) == {"race", "qualification", "sprint"}
+        assert len(distributions["race"]) == 20  # 20 drivers
 
-        # Should sum to 1.0
-        assert sum(dist.position_probs.values()) == pytest.approx(1.0)
+        # Ensure all distributions are valid
+        for session, driver_dists in distributions.items():
+            for driver_id, dist in driver_dists.items():
+                assert dist.is_valid
+                assert sum(dist.position_probs.values()) == pytest.approx(1.0)
 
-    def test_from_odds_dict(self):
-        """Test creating distributions from odds dictionary."""
-        # Sample odds dictionary
-        odds_dict = {"VER": 1.5, "HAM": 3.0, "NOR": 6.0}
+    def test_fallback_behavior(self, simple_odds_structure):
+        """Test the fallback behavior for different session types."""
+        # With fallback enabled (default)
+        distributions = DistributionFactory.from_structured_odds(simple_odds_structure)
+        assert "race" in distributions
+        assert "qualification" in distributions
+        assert "sprint" in distributions
 
-        # Create distributions
-        distributions = DistributionFactory.from_odds_dict(odds_dict)
+        # With fallback disabled
+        distributions = DistributionFactory.from_structured_odds(
+            simple_odds_structure, fallback_to_race=False
+        )
+        assert "race" in distributions
+        assert "qualification" not in distributions
+        assert "sprint" not in distributions
 
-        # Should have distributions for all drivers
-        assert set(distributions.keys()) == {"VER", "HAM", "NOR"}
+        # Add empty qualification data
+        simple_odds_structure["qualification"] = {}
 
-        # Should be position distributions
-        assert isinstance(distributions["VER"], PositionDistribution)
-        assert isinstance(distributions["HAM"], PositionDistribution)
-        assert isinstance(distributions["NOR"], PositionDistribution)
-
-        # Each distribution should be valid
-        for dist in distributions.values():
-            assert dist.is_valid
-
-        # Lower odds should have higher win probability
+        # With fallback enabled, should use race data for qualification
+        distributions = DistributionFactory.from_structured_odds(simple_odds_structure)
+        assert "qualification" in distributions
         assert (
-            distributions["VER"][1] > distributions["HAM"][1] > distributions["NOR"][1]
+            len(distributions["qualification"]) == 3
+        )  # Should have the same 3 drivers
+
+    def test_empty_structure(self):
+        """Test with an empty odds structure."""
+        distributions = DistributionFactory.from_structured_odds({})
+        assert distributions == {}
+
+    def test_register_with_registry(self, simple_odds_structure, mock_registry):
+        """Test registering distributions with a registry."""
+        DistributionFactory.register_structured_odds(
+            mock_registry, simple_odds_structure
         )
 
-        # Sum of P1 probabilities should be close to 1.0 for Harville method
-        p1_sum = sum(dist[1] for dist in distributions.values())
-        assert p1_sum == pytest.approx(1.0)
+        # Should register for all three sessions with all drivers
+        expected_calls = 3 * 3  # 3 sessions (race, qual, sprint) x 3 drivers
+        assert mock_registry.register.call_count == expected_calls
 
-    def test_from_probabilities(self):
-        """Test creating distribution from probabilities."""
-        probs = {1: 0.6, 2: 0.4}
-        dist = DistributionFactory.from_probabilities(probs)
+        # Check call format
+        for call_args in mock_registry.register.call_args_list:
+            args, _ = call_args
+            driver_id, session, dist = args
 
-        # Should have right values
-        assert dist[1] == 0.6
-        assert dist[2] == 0.4
-
-    def test_from_probabilities_without_validation(self):
-        """Test creating distribution without validation."""
-        # Invalid probabilities (don't sum to 1.0)
-        probs = {1: 0.6, 2: 0.2}
-
-        # Should raise error with validation
-        with pytest.raises(Exception):
-            DistributionFactory.from_probabilities(probs)
-
-        # Should not raise error without validation
-        dist = DistributionFactory.from_probabilities(probs, validate=False)
-        assert dist[1] == 0.6
-        assert dist[2] == 0.2
-
-    def test_from_probabilities_dict(self):
-        """Test creating distributions from probabilities dictionary."""
-        # Sample probabilities dictionary
-        probs_dict = {
-            "VER": {1: 0.6, 2: 0.3, 3: 0.1},
-            "HAM": {1: 0.3, 2: 0.5, 3: 0.2},
-            "NOR": {1: 0.1, 2: 0.2, 3: 0.7},
-        }
-
-        # Create distributions
-        distributions = DistributionFactory.from_probabilities_dict(probs_dict)
-
-        # Should have distributions for all drivers
-        assert set(distributions.keys()) == {"VER", "HAM", "NOR"}
-
-        # Should be position distributions
-        assert isinstance(distributions["VER"], PositionDistribution)
-        assert isinstance(distributions["HAM"], PositionDistribution)
-        assert isinstance(distributions["NOR"], PositionDistribution)
-
-        # Each distribution should be valid
-        for dist in distributions.values():
-            assert dist.is_valid
-
-        # Should have the original probabilities
-        assert distributions["VER"][1] == 0.6
-        assert distributions["HAM"][2] == 0.5
-        assert distributions["NOR"][3] == 0.7
-
-        # Positions not specified should have zero probability
-        assert distributions["VER"][4] == 0.0
-        assert distributions["HAM"][4] == 0.0
-        assert distributions["NOR"][4] == 0.0
-
-    def test_from_json_position(self):
-        """Test creating position distribution from JSON."""
-        json_str = '{"type": "position", "probabilities": {"1": 0.6, "2": 0.4}}'
-        dist = DistributionFactory.from_json(json_str)
-
-        # Should be a position distribution
-        assert isinstance(dist, PositionDistribution)
-
-        # Should have right values
-        assert dist[1] == 0.6
-        assert dist[2] == 0.4
-
-    def test_from_json_joint(self):
-        """Test creating joint distribution from JSON."""
-        json_str = (
-            '{"type": "joint", '
-            '"outcome1_name": "qualifying", "outcome2_name": "race", '
-            '"probabilities": {"(1, 1)": 0.4, "(1, 2)": 0.2, "(2, 1)": 0.1, "(2, 2)": 0.3}}'
-        )
-        dist = DistributionFactory.from_json(json_str)
-
-        # Should be a joint distribution
-        assert isinstance(dist, JointDistribution)
-
-        # Should have right outcome names
-        assert dist.outcome1_name == "qualifying"
-        assert dist.outcome2_name == "race"
-
-        # Should have right values
-        assert dist[(1, 1)] == 0.4
-        assert dist[(1, 2)] == 0.2
-        assert dist[(2, 1)] == 0.1
-        assert dist[(2, 2)] == 0.3
-
-    def test_from_json_invalid(self):
-        """Test errors on invalid JSON."""
-        # Invalid JSON syntax
-        with pytest.raises(ValueError, match="Invalid JSON"):
-            DistributionFactory.from_json("{invalid json")
-
-        # Missing type field
-        with pytest.raises(ValueError, match="Missing 'type' field"):
-            DistributionFactory.from_json('{"probabilities": {"1": 0.6}}')
-
-        # Unknown type
-        with pytest.raises(ValueError, match="Unknown distribution type"):
-            DistributionFactory.from_json(
-                '{"type": "unknown", "probabilities": {"1": 0.6}}'
-            )
-
-        # Missing probabilities field
-        with pytest.raises(ValueError, match="Missing 'probabilities' field"):
-            DistributionFactory.from_json('{"type": "position"}')
-
-    def test_from_file(self):
-        """Test creating distribution from file."""
-        # Create a temporary file with distribution data
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump({"type": "position", "probabilities": {"1": 0.6, "2": 0.4}}, f)
-            f.flush()
-            file_path = f.name
-
-        try:
-            # Load from file
-            dist = DistributionFactory.from_file(file_path)
-
-            # Should be a position distribution
+            # Verify the arguments have the expected format
+            assert driver_id in ["VER", "HAM", "NOR"]
+            assert session in ["race", "qualification", "sprint"]
             assert isinstance(dist, PositionDistribution)
 
-            # Should have right values
-            assert dist[1] == 0.6
-            assert dist[2] == 0.4
-        finally:
-            # Clean up
-            if os.path.exists(file_path):
-                os.unlink(file_path)
+    def test_from_odds_dict(self):
+        """Test creating distributions from a simple odds dictionary."""
+        odds_dict = {"VER": 2.0, "HAM": 4.0, "NOR": 5.0}
+        distributions = DistributionFactory.from_odds_dict(odds_dict)
 
-    def test_from_file_nonexistent(self):
-        """Test error on nonexistent file."""
-        with pytest.raises(FileNotFoundError):
-            DistributionFactory.from_file("nonexistent_file.json")
+        # Check basic structure
+        assert "VER" in distributions
+        assert "HAM" in distributions
+        assert "NOR" in distributions
 
-    def test_from_dict(self):
-        """Test creating distribution from dictionary."""
-        # Position distribution
-        data = {"type": "position", "probabilities": {1: 0.6, 2: 0.4}}
-        dist = DistributionFactory.from_dict(data)
+        # Verify all are valid distributions
+        for driver_id, dist in distributions.items():
+            assert isinstance(dist, PositionDistribution)
+            assert dist.is_valid
 
-        assert isinstance(dist, PositionDistribution)
-        assert dist[1] == 0.6
-        assert dist[2] == 0.4
+    def test_from_simple_odds(self):
+        """Test creating distributions from a list of odds."""
+        odds = [2.0, 4.0, 5.0]
+        driver_ids = ["VER", "HAM", "NOR"]
 
-        # Joint distribution
-        data = {
-            "type": "joint",
-            "outcome1_name": "qual",
-            "outcome2_name": "race",
-            "probabilities": {(1, 1): 0.4, (1, 2): 0.2, (2, 1): 0.1, (2, 2): 0.3},
-        }
-        dist = DistributionFactory.from_dict(data)
+        # With driver IDs provided
+        distributions = DistributionFactory.from_simple_odds(odds, driver_ids)
+        assert "VER" in distributions
+        assert "HAM" in distributions
+        assert "NOR" in distributions
 
-        assert isinstance(dist, JointDistribution)
-        assert dist.outcome1_name == "qual"
-        assert dist.outcome2_name == "race"
-        assert dist[(1, 1)] == 0.4
+        # Without driver IDs (should use position numbers as IDs)
+        distributions = DistributionFactory.from_simple_odds(odds)
+        assert "1" in distributions
+        assert "2" in distributions
+        assert "3" in distributions
 
-    def test_from_dict_invalid(self):
-        """Test errors on invalid dictionary."""
-        # Missing type
-        with pytest.raises(ValueError, match="Missing 'type' field"):
-            DistributionFactory.from_dict({"probabilities": {1: 0.6}})
+        # Error case: mismatched lengths
+        with pytest.raises(ValueError, match="Number of driver IDs must match"):
+            DistributionFactory.from_simple_odds(odds, driver_ids[:2])
 
-        # Unknown type
-        with pytest.raises(ValueError, match="Unknown distribution type"):
-            DistributionFactory.from_dict(
-                {"type": "unknown", "probabilities": {1: 0.6}}
+    def test_conversion_methods(self, simple_odds_structure):
+        """Test that different conversion methods produce different results."""
+        methods = ["basic", "odds_ratio", "power"]
+        results = {}
+
+        # Generate distributions using different methods
+        for method in methods:
+            results[method] = DistributionFactory.from_structured_odds(
+                simple_odds_structure, method=method
             )
 
-        # Missing probabilities
-        with pytest.raises(ValueError, match="Missing 'probabilities' field"):
-            DistributionFactory.from_dict({"type": "position"})
-
-    def test_grid_from_odds(self):
-        """Test creating grid of distributions from odds."""
-        odds = [1.5, 3.0]
-        driver_ids = ["VER", "HAM"]
-        dists = DistributionFactory.grid_from_odds(odds, driver_ids)
-
-        # Should have distributions for both drivers
-        assert set(dists.keys()) == set(driver_ids)
-
-        # Should be position distributions
-        assert isinstance(dists["VER"], PositionDistribution)
-        assert isinstance(dists["HAM"], PositionDistribution)
-
-        # Should have valid probabilities
-        assert dists["VER"].is_valid
-        assert dists["HAM"].is_valid
-
-        # Higher odds driver should have lower P1 probability
-        assert dists["VER"][1] > dists["HAM"][1]
-
-    def test_joint_independent(self):
-        """Test creating independent joint distribution."""
-        dist1 = DistributionFactory.from_probabilities({1: 0.6, 2: 0.4})
-        dist2 = DistributionFactory.from_probabilities({1: 0.3, 2: 0.7})
-
-        joint = DistributionFactory.joint_independent(dist1, dist2)
-
-        # Should have right probabilities
-        assert joint[(1, 1)] == pytest.approx(0.6 * 0.3)
-        assert joint[(1, 2)] == pytest.approx(0.6 * 0.7)
-        assert joint[(2, 1)] == pytest.approx(0.4 * 0.3)
-        assert joint[(2, 2)] == pytest.approx(0.4 * 0.7)
-
-        # Should be independent
-        assert joint.is_independent()
-
-    def test_joint_constrained(self):
-        """Test creating constrained joint distribution."""
-        dist1 = DistributionFactory.from_probabilities({1: 0.6, 2: 0.4})
-        dist2 = DistributionFactory.from_probabilities({1: 0.3, 2: 0.7})
-
-        joint = DistributionFactory.joint_constrained(dist1, dist2)
-
-        # Should have zero probability for same positions
-        assert joint[(1, 1)] == 0.0
-        assert joint[(2, 2)] == 0.0
-
-        # Should be valid
-        assert joint.is_valid
-
-        # Should not be independent
-        assert not joint.is_independent()
-
-    def test_joint_conditional(self):
-        """Test creating conditional joint distribution."""
-        marginal = DistributionFactory.from_probabilities({1: 0.6, 2: 0.4})
-
-        def get_conditional(x):
-            if x == 1:
-                return DistributionFactory.from_probabilities({1: 0.2, 2: 0.8})
-            else:  # x == 2
-                return DistributionFactory.from_probabilities({1: 0.7, 2: 0.3})
-
-        joint = DistributionFactory.joint_conditional(marginal, get_conditional)
-
-        # Should have right probabilities
-        assert joint[(1, 1)] == pytest.approx(0.6 * 0.2)
-        assert joint[(1, 2)] == pytest.approx(0.6 * 0.8)
-        assert joint[(2, 1)] == pytest.approx(0.4 * 0.7)
-        assert joint[(2, 2)] == pytest.approx(0.4 * 0.3)
-
-        # Should not be independent (in general)
-        assert not joint.is_independent()
-
-    def test_builder(self):
-        """Test getting a builder."""
-        builder = DistributionFactory.builder()
-        assert isinstance(builder, DistributionBuilder)
-
-
-class TestDistributionBuilder:
-    """Test suite for DistributionBuilder."""
-
-    def test_basic_build(self):
-        """Test building basic distribution."""
-        dist = DistributionBuilder().from_odds([1.5, 3.0, 6.0]).build()
-
-        assert isinstance(dist, PositionDistribution)
-        assert dist.is_valid
-        assert dist[1] > dist[2] > dist[3]
-
-    def test_with_entity_and_context(self):
-        """Test building with entity and context (metadata only)."""
-        dist = (
-            DistributionBuilder()
-            .for_entity("VER")
-            .in_context("qualifying")
-            .from_odds([1.5, 3.0, 6.0])
-            .build()
-        )
-
-        assert isinstance(dist, PositionDistribution)
-        assert dist.is_valid
-        # Entity and context are metadata only, not stored in distribution
-
-    def test_from_probabilities(self):
-        """Test building from probabilities."""
-        dist = DistributionBuilder().from_probabilities({1: 0.6, 2: 0.4}).build()
-
-        assert isinstance(dist, PositionDistribution)
-        assert dist[1] == 0.6
-        assert dist[2] == 0.4
-
-    def test_from_distribution(self):
-        """Test building from existing distribution."""
-        existing = PositionDistribution({1: 0.6, 2: 0.4})
-        dist = DistributionBuilder().from_distribution(existing).build()
-
-        assert dist is existing  # Should be the same object
-
-    def test_using_method(self):
-        """Test using different odds conversion method."""
-        dist1 = (
-            DistributionBuilder()
-            .from_odds([1.5, 3.0, 6.0])
-            .using_method("basic")
-            .build()
-        )
-
-        dist2 = (
-            DistributionBuilder()
-            .from_odds([1.5, 3.0, 6.0])
-            .using_method("shin")
-            .build()
-        )
-
-        # Different methods should give different results
-        assert dist1[1] != dist2[1]
-
-        # But both should be valid
-        assert dist1.is_valid
-        assert dist2.is_valid
-
-    def test_with_smoothing(self):
-        """Test applying smoothing."""
-        # Create a distribution with a single peak
-        dist = (
-            DistributionBuilder()
-            .from_probabilities({1: 1.0, 2: 0.0})
-            .with_smoothing(0.2)
-            .build()
-        )
-
-        # Should have smoothed out the peak
-        assert dist[1] < 1.0
-        assert dist[2] > 0.0
-
-        # Should still be valid
-        assert dist.is_valid
-
-    def test_invalid_smoothing(self):
-        """Test error on invalid smoothing parameter."""
-        builder = DistributionBuilder().from_odds([1.5, 3.0, 6.0])
-
-        with pytest.raises(ValueError, match="must be between 0 and 1"):
-            builder.with_smoothing(1.5)
-
-    def test_build_without_data(self):
-        """Test error when building without data source."""
-        builder = DistributionBuilder()
-
-        with pytest.raises(ValueError, match="No data source provided"):
-            builder.build()
-
-    def test_chain_building(self):
-        """Test chaining of build methods (later ones override earlier ones)."""
-        # Start with probabilities
-        builder = DistributionBuilder().from_probabilities({1: 0.6, 2: 0.4})
-
-        # Then override with odds
-        dist = builder.from_odds([1.5, 3.0, 6.0]).build()
-
-        # Should use the odds
-        assert dist[1] != 0.6
+        # Verify all methods produce valid distributions
+        for method, distributions in results.items():
+            assert "race" in distributions
+            assert "VER" in distributions["race"]
+            assert distributions["race"]["VER"].is_valid

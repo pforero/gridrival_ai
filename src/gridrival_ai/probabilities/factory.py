@@ -1,888 +1,422 @@
 """
-Factory for creating probability distributions.
+Factory for creating probability distributions from betting odds.
 
-This module provides factory methods for creating probability distributions
-from various data sources, including dictionary-format betting odds.
-It handles the creation, validation, and customization of distributions.
-
-Classes
--------
-DistributionFactory
-    Factory for creating probability distributions.
-DistributionBuilder
-    Builder for creating customized probability distributions.
-
-Examples
---------
->>> # Create position distributions from dictionary odds
->>> from gridrival_ai.probabilities.factory import DistributionFactory
->>> odds_dict = {"VER": 1.5, "HAM": 3.0, "NOR": 6.0}
->>> dists = DistributionFactory.from_odds_dict(odds_dict)
->>> dists["VER"][1]  # Probability of VER finishing P1
-0.5714285714285714
-
->>> # Use builder pattern for more complex cases
->>> from gridrival_ai.probabilities.factory import DistributionBuilder
->>> dist = (DistributionBuilder()
-...         .for_entity("VER")
-...         .in_context("qualifying")
-...         .from_odds_dict({"VER": 1.5, "HAM": 3.0})
-...         .using_method("shin")
-...         .with_smoothing(0.1)
-...         .build())
+This module provides factory methods for creating F1 race probability
+distributions from structured betting odds data. It simplifies the process
+of converting market odds into position distributions for drivers across
+different race sessions.
 """
 
-from __future__ import annotations
+from typing import Dict, List, Optional, Set
 
-import json
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
-
-from gridrival_ai.probabilities.conversion import (
-    odds_to_distributions,
-    odds_to_grid,
-    odds_to_position_distribution,
-)
-from gridrival_ai.probabilities.core import (
-    Distribution,
-    JointDistribution,
-    PositionDistribution,
-    create_conditional_joint,
-    create_constrained_joint,
-    create_independent_joint,
-)
+from gridrival_ai.probabilities.conversion import ConverterFactory
+from gridrival_ai.probabilities.core import PositionDistribution
+from gridrival_ai.probabilities.registry import DistributionRegistry
 
 
 class DistributionFactory:
     """
-    Factory for creating probability distributions.
+    Factory for creating race probability distributions from betting odds.
 
-    This class provides static methods for creating probability distributions
-    from various data sources, including dictionary-format betting odds.
+    This class provides methods for converting structured betting odds
+    into position distributions for drivers and sessions, as well as
+    registering these distributions with a distribution registry.
 
     Examples
     --------
-    >>> # Create position distribution from odds
-    >>> odds = [1.5, 3.0, 6.0]
-    >>> dist = DistributionFactory.from_odds(odds)
-    >>> dist[1]  # Probability of P1
-    0.5714285714285714
-
-    >>> # Create position distributions from dictionary odds
-    >>> odds_dict = {"VER": 1.5, "HAM": 3.0, "NOR": 6.0}
-    >>> dists = DistributionFactory.from_odds_dict(odds_dict)
-    >>> dists["VER"][1]  # Probability of VER finishing P1
-    0.5714285714285714
+    >>> # Define structured odds
+    >>> odds_structure = {
+    ...     "race": {
+    ...         1: {"VER": 5, "HAM": 7.75, "NOR": 3},  # Win odds
+    ...         3: {"VER": 2, "HAM": 3, "NOR": 1.5},   # Top 3 odds
+    ...     },
+    ...     "qualification": {
+    ...         1: {"VER": 3.5, "HAM": 6, "NOR": 2.5}, # Pole position odds
+    ...     }
+    ... }
+    >>>
+    >>> # Create distributions for all drivers and sessions
+    >>> distributions = DistributionFactory.from_structured_odds(odds_structure)
+    >>>
+    >>> # Access specific driver distribution
+    >>> ver_race_dist = distributions["race"]["VER"]
+    >>> print(f"Probability of VER finishing P1: {ver_race_dist[1]:.1%}")
     """
 
     @staticmethod
-    def from_odds(
-        odds: List[float], method: str = "basic", target_sum: float = 1.0, **kwargs
-    ) -> PositionDistribution:
+    def from_structured_odds(
+        odds_structure: Dict[str, Dict[int, Dict[str, float]]],
+        method: str = "basic",
+        fallback_to_race: bool = True,
+        **kwargs,
+    ) -> Dict[str, Dict[str, PositionDistribution]]:
         """
-        Create position distribution from odds.
+        Create position distributions from a structured betting odds dictionary.
 
         Parameters
         ----------
-        odds : List[float]
-            List of decimal odds. Must be > 1.0.
+        odds_structure : Dict[str, Dict[int, Dict[str, float]]]
+            Nested dictionary with format:
+            {
+                "race": {
+                    1: {"VER": 5, "HAM": 7.75, ...},  # Win odds
+                    3: {"VER": 2, "HAM": 3.5, ...},   # Top 3 odds
+                    ...
+                },
+                "qualification": {...},
+                "sprint": {...}
+            }
         method : str, optional
-            Conversion method name, by default "basic".
-            Options: "basic", "odds_ratio", "shin", "power".
-        target_sum : float, optional
-            Target sum for probabilities, by default 1.0.
+            Conversion method name, by default "basic"
+            Options: "basic", "odds_ratio", "shin", "power", "harville"
+        fallback_to_race : bool, optional
+            Whether to use race odds when qualification or sprint odds are missing,
+            by default True
         **kwargs
-            Additional parameters for the converter.
+            Additional parameters for the converter
 
         Returns
         -------
-        PositionDistribution
-            Position distribution.
+        Dict[str, Dict[str, PositionDistribution]]
+            Dictionary mapping race types to dictionaries of driver distributions:
+            {
+                "race": {"VER": PositionDistribution, "HAM": PositionDistribution, ...},
+                "qualification": {...},
+                "sprint": {...}
+            }
+
+        Notes
+        -----
+        The position keys (1, 3, 6, etc.) represent finish position thresholds.
+        For example, position 3 means odds of finishing in positions 1, 2, or 3.
+        Multiple position thresholds are used to create more accurate distributions.
+        """
+        result = {}
+
+        # Collect all driver IDs across all sessions
+        all_drivers: Set[str] = set()
+        for session in odds_structure:
+            for position in odds_structure[session]:
+                all_drivers.update(odds_structure[session][position].keys())
+
+        # Get race data for fallback if needed
+        race_data = odds_structure.get("race", {})
+
+        # Only process sessions that exist in the input structure or are explicitly
+        # requested
+        sessions_to_process = []
+
+        # First add sessions that exist in the input
+        for session in odds_structure.keys():
+            sessions_to_process.append(session)
+
+        # Then consider fallback if enabled
+        if fallback_to_race and "race" in odds_structure:
+            for fallback_session in ["qualification", "sprint"]:
+                # Only add fallback sessions if they don't already exist
+                if fallback_session not in sessions_to_process:
+                    sessions_to_process.append(fallback_session)
+
+        # Process each session
+        for session in sessions_to_process:
+            # Get session data from the odds structure if it exists
+            if session in odds_structure:
+                session_data = odds_structure[session]
+                # If data is empty and fallback is enabled, use race data instead
+                if (
+                    not session_data
+                    and fallback_to_race
+                    and session in ["qualification", "sprint"]
+                    and "race" in odds_structure
+                ):
+                    session_data = race_data
+            elif (
+                fallback_to_race
+                and session in ["qualification", "sprint"]
+                and "race" in odds_structure
+            ):
+                session_data = race_data
+            else:
+                continue
+
+            # Skip if still no data
+            if not session_data:
+                continue
+
+            # Process each threshold position
+            threshold_probs: Dict[int, Dict[str, float]] = {}
+            for position, odds_dict in session_data.items():
+                # Each position threshold should sum to the position value
+                # (e.g., for position 3, probabilities should sum to 3.0)
+                threshold_probs[position] = {}
+
+                # Collect valid odds for all drivers
+                valid_odds = {}
+                valid_driver_ids = []
+                for driver_id, odds in odds_dict.items():
+                    if odds <= 1.0:
+                        continue  # Skip invalid odds
+                    valid_odds[driver_id] = odds
+                    valid_driver_ids.append(driver_id)
+
+                if not valid_odds:
+                    continue  # Skip if no valid odds
+
+                # Convert odds to probabilities using the specified method
+                converter = ConverterFactory.get(method, **kwargs)
+                odds_list = [valid_odds[d] for d in valid_driver_ids]
+                probs = converter.convert(odds_list, target_sum=float(position))
+
+                # Store probabilities for each driver
+                for i, driver_id in enumerate(valid_driver_ids):
+                    threshold_probs[position][driver_id] = probs[i]
+
+            # Convert threshold probabilities to position distributions
+            driver_dists = DistributionFactory._create_position_distributions(
+                threshold_probs, all_drivers, **kwargs
+            )
+
+            result[session] = driver_dists
+
+        return result
+
+    @staticmethod
+    def _create_position_distributions(
+        threshold_probs: Dict[int, Dict[str, float]], all_drivers: Set[str], **kwargs
+    ) -> Dict[str, PositionDistribution]:
+        """
+        Create position distributions from threshold probabilities.
+
+        Parameters
+        ----------
+        threshold_probs : Dict[int, Dict[str, float]]
+            Dictionary mapping threshold positions to driver probabilities
+        all_drivers : Set[str]
+            Set of all driver IDs across all sessions
+        **kwargs
+            Additional parameters for converter
+
+        Returns
+        -------
+        Dict[str, PositionDistribution]
+            Dictionary mapping driver IDs to position distributions
+        """
+        driver_dists = {}
+
+        # Get sorted thresholds
+        thresholds = sorted(threshold_probs.keys())
+        if not thresholds:
+            return {}
+
+        # Maximum position we'll consider (can be adjusted as needed)
+        max_position = max(thresholds) * 2
+
+        # Step 1: Extract cumulative probabilities for each driver at each threshold
+        # This maps driver_id -> position -> cumulative probability
+        driver_cum_probs = {driver_id: {} for driver_id in all_drivers}
+
+        for threshold in thresholds:
+            threshold_data = threshold_probs.get(threshold, {})
+            for driver_id in all_drivers:
+                # Get probability for this driver at this threshold
+                cum_prob = threshold_data.get(driver_id, 0.0)
+                driver_cum_probs[driver_id][threshold] = cum_prob
+
+        # Step 2: Convert cumulative probabilities to position-specific probabilities
+        # This maps driver_id -> position -> exact position probability
+        driver_exact_probs = {driver_id: {} for driver_id in all_drivers}
+
+        for driver_id in all_drivers:
+            cum_probs = driver_cum_probs[driver_id]
+            last_cum_prob = 0.0
+
+            # Process each threshold to get position-specific probabilities
+            for i, threshold in enumerate(thresholds):
+                current_cum_prob = cum_probs.get(threshold, 0.0)
+
+                # Skip if probability does not increase
+                if current_cum_prob <= last_cum_prob:
+                    continue
+
+                # Calculate exact probability for this range
+                range_prob = current_cum_prob - last_cum_prob
+
+                # Determine position range this threshold represents
+                start_pos = 1 if i == 0 else thresholds[i - 1] + 1
+                end_pos = threshold
+
+                # Calculate positions in this range
+                positions_in_range = list(range(start_pos, end_pos + 1))
+                if not positions_in_range:
+                    continue
+
+                # Distribute probability across positions in this range
+                # We use a weighted distribution where earlier positions get higher
+                # probability. This better reflects reality where P1 is harder than P2,
+                # P2 harder than P3, etc.
+                total_weight = sum(1 / p for p in positions_in_range)
+                for pos in positions_in_range:
+                    # Weight is inversely proportional to position
+                    weight = (1 / pos) / total_weight
+                    exact_prob = range_prob * weight
+                    driver_exact_probs[driver_id][pos] = exact_prob
+
+                last_cum_prob = current_cum_prob
+
+        # Step 3: Fill in missing positions with small probabilities to ensure all
+        # drivers have a full distribution
+        for driver_id in all_drivers:
+            for pos in range(1, max_position + 1):
+                if pos not in driver_exact_probs[driver_id]:
+                    # Add small probability for missing positions
+                    driver_exact_probs[driver_id][pos] = 1e-6
+
+        # Step 4: Ensure all position probabilities sum to 1.0 for each driver
+        for driver_id in all_drivers:
+            probs = driver_exact_probs[driver_id]
+            if not probs:
+                continue
+
+            # Normalize to ensure sum to 1.0
+            total = sum(probs.values())
+            if total > 0:
+                normalized = {k: v / total for k, v in probs.items()}
+                try:
+                    driver_dists[driver_id] = PositionDistribution(normalized)
+                except Exception:
+                    # If validation fails, try without validation and normalize
+                    dist = PositionDistribution(normalized, _validate=False)
+                    driver_dists[driver_id] = dist.normalize()
+
+        return driver_dists
+
+    @staticmethod
+    def register_structured_odds(
+        registry: DistributionRegistry,
+        odds_structure: Dict[str, Dict[int, Dict[str, float]]],
+        method: str = "basic",
+        fallback_to_race: bool = True,
+        **kwargs,
+    ) -> None:
+        """
+        Register distributions from structured odds with a distribution registry.
+
+        Parameters
+        ----------
+        registry : DistributionRegistry
+            Registry to register distributions with
+        odds_structure : Dict[str, Dict[int, Dict[str, float]]]
+            Structured odds dictionary (see from_structured_odds for format)
+        method : str, optional
+            Conversion method, by default "basic"
+        fallback_to_race : bool, optional
+            Whether to use race odds when qualification or sprint odds are missing,
+            by default True
+        **kwargs
+            Additional parameters for converter
 
         Examples
         --------
-        >>> odds = [1.5, 3.0, 6.0]
-        >>> dist = DistributionFactory.from_odds(odds)
-        >>> dist[1]  # Probability of P1
-        0.5714285714285714
+        >>> registry = DistributionRegistry()
+        >>> DistributionFactory.register_structured_odds(registry, odds_structure)
+        >>> race_dist = registry.get("VER", "race")
         """
-        return odds_to_position_distribution(odds, method, target_sum, **kwargs)
+        distributions = DistributionFactory.from_structured_odds(
+            odds_structure, method=method, fallback_to_race=fallback_to_race, **kwargs
+        )
+
+        # Register each distribution with the registry
+        # Only register distributions for sessions that:
+        # 1. Exist in the input structure, OR
+        # 2. Are qualification/sprint specifically requested via fallback
+        for session, driver_dists in distributions.items():
+            should_register = False
+
+            # Case 1: The session exists in the original odds structure
+            if session in odds_structure:
+                should_register = True
+            # Case 2: Session is a fallback session AND fallback is enabled AND we have
+            # race data
+            elif (
+                session in ["qualification", "sprint"]
+                and fallback_to_race
+                and "race" in odds_structure
+            ):
+                should_register = True
+
+            # Only register if we should
+            if should_register:
+                for driver_id, dist in driver_dists.items():
+                    registry.register(driver_id, session, dist)
 
     @staticmethod
     def from_odds_dict(
-        odds_dict: Dict[str, float],
+        odds_dict: Dict[str, float], method: str = "basic", **kwargs
+    ) -> Dict[str, PositionDistribution]:
+        """
+        Create position distributions from a dictionary of driver odds.
+
+        Parameters
+        ----------
+        odds_dict : Dict[str, float]
+            Dictionary mapping driver IDs to their decimal odds
+        method : str, optional
+            Conversion method, by default "basic"
+        **kwargs
+            Additional parameters for converter
+
+        Returns
+        -------
+        Dict[str, PositionDistribution]
+            Dictionary mapping driver IDs to position distributions
+
+        Examples
+        --------
+        >>> odds = {"VER": 5, "HAM": 7.75, "NOR": 3}
+        >>> dists = DistributionFactory.from_odds_dict(odds)
+        """
+        # Create simplified structure with only position 1
+        structure = {"race": {1: odds_dict}}
+
+        # Use the main method
+        distributions = DistributionFactory.from_structured_odds(
+            structure, method=method, **kwargs
+        )
+
+        # Return just the race distributions
+        return distributions.get("race", {})
+
+    @staticmethod
+    def from_simple_odds(
+        odds: List[float],
+        driver_ids: Optional[List[str]] = None,
         method: str = "basic",
-        target_sum: float = 1.0,
         **kwargs,
     ) -> Dict[str, PositionDistribution]:
         """
-        Create position distributions from dictionary of driver odds.
+        Create position distributions from a list of odds.
 
         Parameters
         ----------
-        odds_dict : Dict[str, float]
-            Dictionary mapping driver IDs to their decimal odds. Must be > 1.0.
+        odds : List[float]
+            List of decimal odds for drivers
+        driver_ids : Optional[List[str]], optional
+            List of driver IDs, by default None (uses positions as IDs)
         method : str, optional
-            Conversion method name, by default "basic".
-            Options: "basic", "odds_ratio", "shin", "power", "harville".
-        target_sum : float, optional
-            Target sum for probabilities, by default 1.0.
+            Conversion method, by default "basic"
         **kwargs
-            Additional parameters for the converter.
+            Additional parameters for converter
 
         Returns
         -------
         Dict[str, PositionDistribution]
-            Dictionary mapping driver IDs to their position distributions.
-
-        Examples
-        --------
-        >>> odds_dict = {"VER": 1.5, "HAM": 3.0, "NOR": 6.0}
-        >>> dists = DistributionFactory.from_odds_dict(odds_dict)
-        >>> dists["VER"][1]  # Probability of VER finishing P1
-        0.5714285714285714
+            Dictionary mapping driver IDs to position distributions
         """
-        # Extract driver IDs and odds
-        driver_ids = list(odds_dict.keys())
-        odds_values = [odds_dict[driver_id] for driver_id in driver_ids]
+        if driver_ids is None:
+            driver_ids = [str(i + 1) for i in range(len(odds))]
 
-        # For Harville method, use the specialized grid function
-        if method == "harville":
-            return odds_to_distributions(odds_values, driver_ids, **kwargs)
+        if len(driver_ids) != len(odds):
+            raise ValueError("Number of driver IDs must match number of odds")
 
-        # For other methods, create distributions for each driver based on odds
-        grid = odds_to_grid(odds_values, driver_ids, **kwargs)
-
-        # Convert grid to individual position distributions
-        return {
-            driver_id: PositionDistribution(positions)
-            for driver_id, positions in grid.items()
-        }
-
-    @staticmethod
-    def from_probabilities(
-        probabilities: Dict[int, float], validate: bool = True
-    ) -> PositionDistribution:
-        """
-        Create position distribution from probability dictionary.
-
-        Parameters
-        ----------
-        probabilities : Dict[int, float]
-            Dictionary mapping positions to probabilities.
-        validate : bool, optional
-            Whether to validate the distribution, by default True.
-
-        Returns
-        -------
-        PositionDistribution
-            Position distribution.
-
-        Examples
-        --------
-        >>> probs = {1: 0.6, 2: 0.4}
-        >>> dist = DistributionFactory.from_probabilities(probs)
-        >>> dist[1]  # Probability of P1
-        0.6
-        """
-        return PositionDistribution(probabilities, _validate=validate)
-
-    @staticmethod
-    def from_probabilities_dict(
-        probs_dict: Dict[str, Dict[int, float]], validate: bool = True
-    ) -> Dict[str, PositionDistribution]:
-        """
-        Create position distributions from nested dictionary of probabilities.
-
-        Parameters
-        ----------
-        probs_dict : Dict[str, Dict[int, float]]
-            Dictionary mapping driver IDs to position probability dictionaries.
-        validate : bool, optional
-            Whether to validate distributions, by default True.
-
-        Returns
-        -------
-        Dict[str, PositionDistribution]
-            Dictionary mapping driver IDs to position distributions.
-
-        Examples
-        --------
-        >>> probs_dict = {
-        ...     "VER": {1: 0.6, 2: 0.4},
-        ...     "HAM": {1: 0.3, 2: 0.7}
-        ... }
-        >>> dists = DistributionFactory.from_probabilities_dict(probs_dict)
-        >>> dists["VER"][1]  # Probability of VER finishing P1
-        0.6
-        """
-        return {
-            driver_id: PositionDistribution(probs, _validate=validate)
-            for driver_id, probs in probs_dict.items()
-        }
-
-    @staticmethod
-    def from_json(
-        json_str: str, validate: bool = True
-    ) -> Union[PositionDistribution, JointDistribution]:
-        """
-        Create distribution from JSON string.
-
-        Parameters
-        ----------
-        json_str : str
-            JSON string representation of the distribution.
-        validate : bool, optional
-            Whether to validate the distribution, by default True.
-
-        Returns
-        -------
-        Union[PositionDistribution, JointDistribution]
-            Probability distribution.
-
-        Raises
-        ------
-        ValueError
-            If JSON format is invalid.
-
-        Examples
-        --------
-        >>> json_str = '{"type": "position", "probabilities": {"1": 0.6, "2": 0.4}}'
-        >>> dist = DistributionFactory.from_json(json_str)
-        >>> dist[1]  # Probability of P1
-        0.6
-        """
-        try:
-            data = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON: {e}")
-
-        if "type" not in data:
-            raise ValueError("Missing 'type' field in JSON")
-
-        if data["type"] == "position":
-            if "probabilities" not in data:
-                raise ValueError("Missing 'probabilities' field in JSON")
-
-            # Convert string keys to integers
-            probs = {int(k): float(v) for k, v in data["probabilities"].items()}
-            return PositionDistribution(probs, _validate=validate)
-        elif data["type"] == "joint":
-            if "probabilities" not in data:
-                raise ValueError("Missing 'probabilities' field in JSON")
-
-            # Extract outcome names
-            outcome1_name = data.get("outcome1_name", "var1")
-            outcome2_name = data.get("outcome2_name", "var2")
-
-            # Convert string tuple keys to actual tuples and values to floats
-            joint_probs = {}
-            for k, v in data["probabilities"].items():
-                # Parse tuple key from string like "(1, 2)"
-                k = k.strip("()[]").replace(" ", "")
-                vals = tuple(map(int, k.split(",")))
-                joint_probs[vals] = float(v)
-
-            return JointDistribution(
-                joint_probs,
-                outcome1_name=outcome1_name,
-                outcome2_name=outcome2_name,
-                _validate=validate,
-            )
-        elif data["type"] == "odds_dict":
-            if "odds" not in data:
-                raise ValueError("Missing 'odds' field in JSON")
-
-            # Create distributions from odds dictionary
-            method = data.get("method", "basic")
-            return DistributionFactory.from_odds_dict(data["odds"], method=method)
-        else:
-            raise ValueError(f"Unknown distribution type: {data['type']}")
-
-    @staticmethod
-    def from_file(
-        file_path: Union[str, Path], validate: bool = True
-    ) -> Union[
-        PositionDistribution, JointDistribution, Dict[str, PositionDistribution]
-    ]:
-        """
-        Create distribution from JSON file.
-
-        Parameters
-        ----------
-        file_path : Union[str, Path]
-            Path to JSON file.
-        validate : bool, optional
-            Whether to validate the distribution, by default True.
-
-        Returns
-        -------
-        Union[PositionDistribution, JointDistribution, Dict[str, PositionDistribution]]
-            Probability distribution or dictionary of distributions.
-
-        Raises
-        ------
-        ValueError
-            If file format is invalid.
-        FileNotFoundError
-            If file does not exist.
-
-        Examples
-        --------
-        >>> dist = DistributionFactory.from_file("path/to/distribution.json")
-        >>> dist[1]  # Probability of P1
-        0.6
-        """
-        with open(file_path, "r") as f:
-            json_str = f.read()
-        return DistributionFactory.from_json(json_str, validate)
-
-    @staticmethod
-    def from_dict(
-        data: Dict[str, Any], validate: bool = True
-    ) -> Union[Distribution, Dict[str, Distribution]]:
-        """
-        Create distribution from dictionary.
-
-        Parameters
-        ----------
-        data : Dict[str, Any]
-            Dictionary representation of the distribution.
-        validate : bool, optional
-            Whether to validate the distribution, by default True.
-
-        Returns
-        -------
-        Union[Distribution, Dict[str, Distribution]]
-            Probability distribution or dictionary of distributions.
-
-        Raises
-        ------
-        ValueError
-            If dictionary format is invalid.
-
-        Examples
-        --------
-        >>> data = {"type": "position", "probabilities": {1: 0.6, 2: 0.4}}
-        >>> dist = DistributionFactory.from_dict(data)
-        >>> dist[1]  # Probability of P1
-        0.6
-
-        >>> # Dictionary of odds
-        >>> data = {"type": "odds_dict", "odds": {"VER": 1.5, "HAM": 3.0}}
-        >>> dists = DistributionFactory.from_dict(data)
-        >>> dists["VER"][1]  # Probability of VER finishing P1
-        0.6666666666666666
-        """
-        if "type" not in data:
-            raise ValueError("Missing 'type' field in dictionary")
-
-        if data["type"] == "position":
-            if "probabilities" not in data:
-                raise ValueError("Missing 'probabilities' field in dictionary")
-            return PositionDistribution(data["probabilities"], _validate=validate)
-        elif data["type"] == "joint":
-            if "probabilities" not in data:
-                raise ValueError("Missing 'probabilities' field in dictionary")
-            outcome1_name = data.get("outcome1_name", "var1")
-            outcome2_name = data.get("outcome2_name", "var2")
-            return JointDistribution(
-                data["probabilities"],
-                outcome1_name=outcome1_name,
-                outcome2_name=outcome2_name,
-                _validate=validate,
-            )
-        elif data["type"] == "odds_dict":
-            if "odds" not in data:
-                raise ValueError("Missing 'odds' field in dictionary")
-            method = data.get("method", "basic")
-            return DistributionFactory.from_odds_dict(
-                data["odds"], method=method, validate=validate
-            )
-        elif data["type"] == "probabilities_dict":
-            if "probabilities" not in data:
-                raise ValueError("Missing 'probabilities' field in dictionary")
-            return DistributionFactory.from_probabilities_dict(
-                data["probabilities"], validate=validate
-            )
-        else:
-            raise ValueError(f"Unknown distribution type: {data['type']}")
-
-    @staticmethod
-    def grid_from_odds(
-        odds: List[float], driver_ids: List[str], **kwargs
-    ) -> Dict[str, PositionDistribution]:
-        """
-        Create position distributions for multiple drivers from grid odds.
-
-        Parameters
-        ----------
-        odds : List[float]
-            List of decimal odds for win market. Must be > 1.0.
-        driver_ids : List[str]
-            List of driver identifiers.
-        **kwargs
-            Additional parameters for Harville converter.
-
-        Returns
-        -------
-        Dict[str, PositionDistribution]
-            Dictionary mapping driver IDs to position distributions.
-
-        Examples
-        --------
-        >>> odds = [1.5, 3.0]
-        >>> driver_ids = ["VER", "HAM"]
-        >>> dists = DistributionFactory.grid_from_odds(odds, driver_ids)
-        >>> dists["VER"][1]  # Probability VER finishes P1
-        0.6666666666666667
-        """
-        return odds_to_distributions(odds, driver_ids, **kwargs)
-
-    @staticmethod
-    def joint_independent(
-        dist1: Distribution,
-        dist2: Distribution,
-        name1: str = "var1",
-        name2: str = "var2",
-    ) -> JointDistribution:
-        """
-        Create joint distribution assuming independence.
-
-        Parameters
-        ----------
-        dist1 : Distribution
-            First marginal distribution.
-        dist2 : Distribution
-            Second marginal distribution.
-        name1 : str, optional
-            Name of first variable, by default "var1".
-        name2 : str, optional
-            Name of second variable, by default "var2".
-
-        Returns
-        -------
-        JointDistribution
-            Joint distribution with P(x,y) = P(x)P(y).
-
-        Examples
-        --------
-        >>> dist1 = DistributionFactory.from_probabilities({1: 0.6, 2: 0.4})
-        >>> dist2 = DistributionFactory.from_probabilities({1: 0.3, 2: 0.7})
-        >>> joint = DistributionFactory.joint_independent(dist1, dist2)
-        >>> joint[(1, 1)]  # P(1,1) = P(1)P(1) = 0.6*0.3
-        0.18
-        """
-        return create_independent_joint(dist1, dist2, name1=name1, name2=name2)
-
-    @staticmethod
-    def joint_constrained(
-        dist1: PositionDistribution,
-        dist2: PositionDistribution,
-        name1: str = "var1",
-        name2: str = "var2",
-    ) -> JointDistribution:
-        """
-        Create joint distribution with constraint that outcomes cannot be equal.
-
-        Parameters
-        ----------
-        dist1 : PositionDistribution
-            First marginal position distribution.
-        dist2 : PositionDistribution
-            Second marginal position distribution.
-        name1 : str, optional
-            Name of first variable, by default "var1".
-        name2 : str, optional
-            Name of second variable, by default "var2".
-
-        Returns
-        -------
-        JointDistribution
-            Constrained joint distribution.
-
-        Examples
-        --------
-        >>> dist1 = DistributionFactory.from_probabilities({1: 0.6, 2: 0.4})
-        >>> dist2 = DistributionFactory.from_probabilities({1: 0.3, 2: 0.7})
-        >>> joint = DistributionFactory.joint_constrained(dist1, dist2)
-        >>> joint[(1, 1)]  # Cannot both finish P1
-        0.0
-        """
-        return create_constrained_joint(dist1, dist2, name1=name1, name2=name2)
-
-    @staticmethod
-    def joint_conditional(
-        marginal: Distribution,
-        conditional_func: Callable[[Any], Distribution],
-        name1: str = "var1",
-        name2: str = "var2",
-    ) -> JointDistribution:
-        """
-        Create joint distribution from marginal and conditional.
-
-        Parameters
-        ----------
-        marginal : Distribution
-            Marginal distribution for first variable.
-        conditional_func : Callable[[Any], Distribution]
-            Function that takes a value of the first variable and returns
-            the conditional distribution for the second variable.
-        name1 : str, optional
-            Name of first variable, by default "var1".
-        name2 : str, optional
-            Name of second variable, by default "var2".
-
-        Returns
-        -------
-        JointDistribution
-            Joint distribution with P(x,y) = P(x)P(y|x).
-
-        Examples
-        --------
-        >>> marginal = DistributionFactory.from_probabilities({1: 0.6, 2: 0.4})
-        >>> def get_conditional(x):
-        ...     if x == 1:
-        ...         return DistributionFactory.from_probabilities({1: 0.2, 2: 0.8})
-        ...     else:  # x == 2
-        ...         return DistributionFactory.from_probabilities({1: 0.7, 2: 0.3})
-        >>> joint = DistributionFactory.joint_conditional(marginal, get_conditional)
-        >>> joint[(1, 1)]  # P(1,1) = P(1)P(1|1) = 0.6*0.2
-        0.12
-        """
-        return create_conditional_joint(
-            marginal, conditional_func, name1=name1, name2=name2
-        )
-
-    @staticmethod
-    def builder() -> DistributionBuilder:
-        """
-        Get a builder for creating distributions.
-
-        Returns
-        -------
-        DistributionBuilder
-            Builder for creating distributions.
-
-        Examples
-        --------
-        >>> builder = DistributionFactory.builder()
-        >>> dist = (builder
-        ...         .for_entity("VER")
-        ...         .in_context("qualifying")
-        ...         .from_odds([1.5, 3.0, 6.0])
-        ...         .with_smoothing(0.1)
-        ...         .build())
-        >>> dist[1]  # Probability of P1
-        0.5142857142857142
-        """
-        return DistributionBuilder()
-
-
-@dataclass
-class DistributionBuilder:
-    """
-    Builder for creating customized probability distributions.
-
-    This class implements the builder pattern for creating distributions
-    with various customizations. It allows for fluent chaining of methods.
-
-    Attributes
-    ----------
-    _entity_id : Optional[str]
-        ID of the entity the distribution is for.
-    _context : Optional[str]
-        Context the distribution applies to.
-    _distribution : Optional[Distribution]
-        The distribution being built.
-    _odds : Optional[List[float]]
-        Odds to convert to probabilities.
-    _odds_dict : Optional[Dict[str, float]]
-        Dictionary mapping entities to odds.
-    _odds_method : str
-        Method for converting odds to probabilities.
-    _probabilities : Optional[Dict[int, float]]
-        Explicit probabilities for positions.
-    _smoothing : Optional[float]
-        Smoothing parameter for the distribution.
-
-    Examples
-    --------
-    >>> builder = DistributionBuilder()
-    >>> dist = (builder
-    ...         .for_entity("VER")
-    ...         .in_context("qualifying")
-    ...         .from_odds_dict({"VER": 1.5, "HAM": 3.0})
-    ...         .with_smoothing(0.1)
-    ...         .build())
-    >>> dist[1]  # Probability of P1
-    0.5142857142857142
-    """
-
-    _entity_id: Optional[str] = None
-    _context: Optional[str] = None
-    _distribution: Optional[Distribution] = None
-    _odds: Optional[List[float]] = None
-    _odds_dict: Optional[Dict[str, float]] = None
-    _odds_method: str = "basic"
-    _probabilities: Optional[Dict[int, float]] = None
-    _smoothing: Optional[float] = None
-
-    def for_entity(self, entity_id: str) -> DistributionBuilder:
-        """
-        Set the entity ID for the distribution.
-
-        Parameters
-        ----------
-        entity_id : str
-            ID of the entity (e.g., driver or constructor code).
-
-        Returns
-        -------
-        DistributionBuilder
-            The builder instance for chaining.
-
-        Examples
-        --------
-        >>> builder = DistributionBuilder()
-        >>> builder = builder.for_entity("VER")
-        """
-        self._entity_id = entity_id
-        return self
-
-    def in_context(self, context: str) -> DistributionBuilder:
-        """
-        Set the context for the distribution.
-
-        Parameters
-        ----------
-        context : str
-            Context for the distribution (e.g., 'qualifying', 'race').
-
-        Returns
-        -------
-        DistributionBuilder
-            The builder instance for chaining.
-
-        Examples
-        --------
-        >>> builder = DistributionBuilder()
-        >>> builder = builder.in_context("qualifying")
-        """
-        self._context = context
-        return self
-
-    def from_odds(self, odds: List[float]) -> DistributionBuilder:
-        """
-        Set odds to convert to probabilities.
-
-        Parameters
-        ----------
-        odds : List[float]
-            List of decimal odds. Must be > 1.0.
-
-        Returns
-        -------
-        DistributionBuilder
-            The builder instance for chaining.
-
-        Examples
-        --------
-        >>> builder = DistributionBuilder()
-        >>> builder = builder.from_odds([1.5, 3.0, 6.0])
-        """
-        self._odds = odds
-        self._odds_dict = None  # Clear any existing odds dictionary
-        self._probabilities = None  # Clear any existing probabilities
-        self._distribution = None  # Clear any existing distribution
-        return self
-
-    def from_odds_dict(self, odds_dict: Dict[str, float]) -> DistributionBuilder:
-        """
-        Set odds dictionary to convert to probabilities.
-
-        Parameters
-        ----------
-        odds_dict : Dict[str, float]
-            Dictionary mapping entity IDs to decimal odds. Must be > 1.0.
-
-        Returns
-        -------
-        DistributionBuilder
-            The builder instance for chaining.
-
-        Examples
-        --------
-        >>> builder = DistributionBuilder()
-        >>> builder = builder.from_odds_dict({"VER": 1.5, "HAM": 3.0})
-        """
-        self._odds_dict = odds_dict
-        self._odds = None  # Clear any existing odds list
-        self._probabilities = None  # Clear any existing probabilities
-        self._distribution = None  # Clear any existing distribution
-        return self
-
-    def using_method(self, method: str) -> DistributionBuilder:
-        """
-        Set method for converting odds to probabilities.
-
-        Parameters
-        ----------
-        method : str
-            Conversion method name.
-            Options: "basic", "odds_ratio", "shin", "power", "harville".
-
-        Returns
-        -------
-        DistributionBuilder
-            The builder instance for chaining.
-
-        Examples
-        --------
-        >>> builder = DistributionBuilder()
-        >>> builder = builder.from_odds([1.5, 3.0, 6.0]).using_method("shin")
-        """
-        self._odds_method = method
-        return self
-
-    def from_probabilities(
-        self, probabilities: Dict[int, float]
-    ) -> DistributionBuilder:
-        """
-        Set explicit probabilities for positions.
-
-        Parameters
-        ----------
-        probabilities : Dict[int, float]
-            Dictionary mapping positions to probabilities.
-
-        Returns
-        -------
-        DistributionBuilder
-            The builder instance for chaining.
-
-        Examples
-        --------
-        >>> builder = DistributionBuilder()
-        >>> builder = builder.from_probabilities({1: 0.6, 2: 0.4})
-        """
-        self._probabilities = probabilities
-        self._odds = None  # Clear any existing odds
-        self._odds_dict = None  # Clear any existing odds dictionary
-        self._distribution = None  # Clear any existing distribution
-        return self
-
-    def from_distribution(self, distribution: Distribution) -> DistributionBuilder:
-        """
-        Set an existing distribution.
-
-        Parameters
-        ----------
-        distribution : Distribution
-            Existing probability distribution.
-
-        Returns
-        -------
-        DistributionBuilder
-            The builder instance for chaining.
-
-        Examples
-        --------
-        >>> from gridrival_ai.probabilities.core import PositionDistribution
-        >>> dist = PositionDistribution({1: 0.6, 2: 0.4})
-        >>> builder = DistributionBuilder()
-        >>> builder = builder.from_distribution(dist)
-        """
-        self._distribution = distribution
-        self._odds = None  # Clear any existing odds
-        self._odds_dict = None  # Clear any existing odds dictionary
-        self._probabilities = None  # Clear any existing probabilities
-        return self
-
-    def with_smoothing(self, alpha: float) -> DistributionBuilder:
-        """
-        Set smoothing parameter for the distribution.
-
-        Parameters
-        ----------
-        alpha : float
-            Smoothing parameter between 0 and 1.
-            Higher values create more uniform distributions.
-
-        Returns
-        -------
-        DistributionBuilder
-            The builder instance for chaining.
-
-        Examples
-        --------
-        >>> builder = DistributionBuilder()
-        >>> builder = builder.from_odds([1.5, 3.0, 6.0]).with_smoothing(0.1)
-        """
-        if not 0 <= alpha <= 1:
-            raise ValueError("Smoothing parameter must be between 0 and 1")
-        self._smoothing = alpha
-        return self
-
-    def build(self) -> Distribution:
-        """
-        Build the distribution.
-
-        Returns
-        -------
-        Distribution
-            The built probability distribution.
-
-        Raises
-        ------
-        ValueError
-            If no data source is provided or entity ID is missing when using odds+
-            dictionary.
-
-        Examples
-        --------
-        >>> builder = DistributionBuilder()
-        >>> dist = (builder
-        ...         .from_odds([1.5, 3.0, 6.0])
-        ...         .with_smoothing(0.1)
-        ...         .build())
-        >>> dist[1]  # Probability of P1
-        0.5142857142857142
-        """
-        # If we already have a distribution, use it
-        if self._distribution is not None:
-            dist = self._distribution
-        # For odds dictionary, we need to extract the specific entity's distribution
-        elif self._odds_dict is not None:
-            if self._entity_id is None:
-                raise ValueError(
-                    "Entity ID must be specified when using odds dictionary. "
-                    "Use .for_entity() method."
-                )
-
-            # Create distributions for all entities
-            dists = DistributionFactory.from_odds_dict(
-                self._odds_dict, method=self._odds_method
-            )
-
-            # Get distribution for the specified entity
-            if self._entity_id not in dists:
-                raise ValueError(
-                    f"Entity ID '{self._entity_id}' not found in odds dictionary"
-                )
-
-            dist = dists[self._entity_id]
-        # Otherwise, create from odds or probabilities
-        elif self._odds is not None:
-            dist = DistributionFactory.from_odds(self._odds, method=self._odds_method)
-        elif self._probabilities is not None:
-            dist = DistributionFactory.from_probabilities(self._probabilities)
-        else:
-            raise ValueError("No data source provided for building distribution")
-
-        # Apply smoothing if requested (only for position distributions)
-        if self._smoothing is not None and isinstance(dist, PositionDistribution):
-            dist = dist.smooth(self._smoothing)
-
-        return dist
+        odds_dict = {driver_id: odd for driver_id, odd in zip(driver_ids, odds)}
+        return DistributionFactory.from_odds_dict(odds_dict, method=method, **kwargs)
