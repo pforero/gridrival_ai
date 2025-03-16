@@ -101,7 +101,7 @@ class DistributionFactory:
     ...         1: {"VER": 5, "HAM": 7.75, "NOR": 3},  # Win odds
     ...         3: {"VER": 2, "HAM": 3, "NOR": 1.5},   # Top 3 odds
     ...     },
-    ...     "qualification": {
+    ...     "qualifying": {
     ...         1: {"VER": 3.5, "HAM": 6, "NOR": 2.5}, # Pole position odds
     ...     }
     ... }
@@ -134,14 +134,14 @@ class DistributionFactory:
                     3: {"VER": 2, "HAM": 3.5, ...},   # Top 3 odds
                     ...
                 },
-                "qualification": {...},
+                "qualifying": {...},
                 "sprint": {...}
             }
         method : str, optional
             Conversion method name, by default "basic"
             Options: "basic", "odds_ratio", "shin", "power", "harville"
         fallback_to_race : bool, optional
-            Whether to use race odds when qualification or sprint odds are missing,
+            Whether to use race odds when qualifying or sprint odds are missing,
             by default True
         **kwargs
             Additional parameters for the converter
@@ -152,7 +152,7 @@ class DistributionFactory:
             Dictionary mapping race types to dictionaries of driver distributions:
             {
                 "race": {"VER": PositionDistribution, "HAM": PositionDistribution, ...},
-                "qualification": {...},
+                "qualifying": {...},
                 "sprint": {...}
             }
 
@@ -186,7 +186,7 @@ class DistributionFactory:
 
         # Then consider fallback if enabled
         if fallback_to_race and "race" in odds_structure:
-            for fallback_session in ["qualification", "sprint"]:
+            for fallback_session in ["qualifying", "sprint"]:
                 # Only add fallback sessions if they don't already exist
                 if fallback_session not in sessions_to_process:
                     sessions_to_process.append(fallback_session)
@@ -200,13 +200,13 @@ class DistributionFactory:
                 if (
                     not session_data
                     and fallback_to_race
-                    and session in ["qualification", "sprint"]
+                    and session in ["qualifying", "sprint"]
                     and "race" in odds_structure
                 ):
                     session_data = race_data
             elif (
                 fallback_to_race
-                and session in ["qualification", "sprint"]
+                and session in ["qualifying", "sprint"]
                 and "race" in odds_structure
             ):
                 session_data = race_data
@@ -445,7 +445,7 @@ class DistributionFactory:
         method : str, optional
             Conversion method, by default "basic"
         fallback_to_race : bool, optional
-            Whether to use race odds when qualification or sprint odds are missing,
+            Whether to use race odds when qualifying or sprint odds are missing,
             by default True
         **kwargs
             Additional parameters for converter
@@ -463,7 +463,7 @@ class DistributionFactory:
         # Register each distribution with the registry
         # Only register distributions for sessions that:
         # 1. Exist in the input structure, OR
-        # 2. Are qualification/sprint specifically requested via fallback
+        # 2. Are qualifying/sprint specifically requested via fallback
         for session, driver_dists in distributions.items():
             should_register = False
 
@@ -473,7 +473,7 @@ class DistributionFactory:
             # Case 2: Session is a fallback session AND fallback is enabled AND we have
             # race data
             elif (
-                session in ["qualification", "sprint"]
+                session in ["qualifying", "sprint"]
                 and fallback_to_race
                 and "race" in odds_structure
             ):

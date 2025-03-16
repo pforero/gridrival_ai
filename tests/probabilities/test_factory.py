@@ -65,7 +65,7 @@ def complex_odds_structure():
             3: top3_drivers,  # Top 3 odds
             10: top10_drivers,  # Top 10 odds
         },
-        "qualification": {
+        "qualifying": {
             1: drivers.copy(),  # Pole odds
         },
     }
@@ -89,7 +89,7 @@ class TestDistributionFactory:
         # Check structure
         assert "race" in distributions
         assert "sprint" in distributions  # Added by fallback
-        assert "qualification" in distributions  # Added by fallback
+        assert "qualifying" in distributions  # Added by fallback
 
         # Check drivers
         assert "VER" in distributions["race"]
@@ -111,7 +111,7 @@ class TestDistributionFactory:
         distributions = DistributionFactory.from_structured_odds(complex_odds_structure)
 
         # Check structure
-        assert set(distributions.keys()) == {"race", "qualification", "sprint"}
+        assert set(distributions.keys()) == {"race", "qualifying", "sprint"}
         assert len(distributions["race"]) == 20  # 20 drivers
 
         # Ensure all distributions are valid
@@ -125,7 +125,7 @@ class TestDistributionFactory:
         # With fallback enabled (default)
         distributions = DistributionFactory.from_structured_odds(simple_odds_structure)
         assert "race" in distributions
-        assert "qualification" in distributions
+        assert "qualifying" in distributions
         assert "sprint" in distributions
 
         # With fallback disabled
@@ -133,18 +133,16 @@ class TestDistributionFactory:
             simple_odds_structure, fallback_to_race=False
         )
         assert "race" in distributions
-        assert "qualification" not in distributions
+        assert "qualifying" not in distributions
         assert "sprint" not in distributions
 
-        # Add empty qualification data
-        simple_odds_structure["qualification"] = {}
+        # Add empty qualifying data
+        simple_odds_structure["qualifying"] = {}
 
-        # With fallback enabled, should use race data for qualification
+        # With fallback enabled, should use race data for qualifying
         distributions = DistributionFactory.from_structured_odds(simple_odds_structure)
-        assert "qualification" in distributions
-        assert (
-            len(distributions["qualification"]) == 3
-        )  # Should have the same 3 drivers
+        assert "qualifying" in distributions
+        assert len(distributions["qualifying"]) == 3  # Should have the same 3 drivers
 
     def test_empty_structure(self):
         """Test with an empty odds structure."""
@@ -168,7 +166,7 @@ class TestDistributionFactory:
 
             # Verify the arguments have the expected format
             assert driver_id in ["VER", "HAM", "NOR"]
-            assert session in ["race", "qualification", "sprint"]
+            assert session in ["race", "qualifying", "sprint"]
             assert isinstance(dist, PositionDistribution)
 
     def test_from_odds_dict(self):
