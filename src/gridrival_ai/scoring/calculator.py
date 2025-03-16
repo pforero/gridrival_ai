@@ -10,6 +10,7 @@ point calculations.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Dict, Optional
 
 import numpy as np
@@ -709,6 +710,18 @@ class ScoringCalculator:
                 break
 
         return stages_completed * self.config.completion_stage_points
+
+    @property
+    def tables(self):
+        """
+        Get scoring tables with attribute-style access.
+
+        Returns
+        -------
+        SimpleNamespace
+            Object for accessing tables via attributes
+        """
+        return SimpleNamespace(**self.engine.tables)
 
     # Private helper methods
     def _calculate_driver_components(self, data: DriverWeekendData) -> Dict[str, float]:
