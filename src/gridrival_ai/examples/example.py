@@ -2,7 +2,9 @@ from gridrival_ai.data.fantasy import FantasyLeagueData
 from gridrival_ai.optimization.optimizer import TeamOptimizer
 from gridrival_ai.points.calculator import PointsCalculator
 from gridrival_ai.probabilities.factory import DistributionFactory
+from gridrival_ai.probabilities.registry import DistributionRegistry
 from gridrival_ai.scoring.calculator import ScoringCalculator
+from gridrival_ai.scoring.types import RaceFormat
 
 # Driver salaries (in millions)
 driver_salaries = {
@@ -100,7 +102,16 @@ def main():
     )
 
     # Step 2: Create distribution registry and populate with race probabilities
-    registry = DistributionFactory.from_odds_dict(winning_odds)
+    # First create an empty registry
+    registry = DistributionRegistry()
+
+    # Then use the factory to populate the registry with distributions
+    # based on the winning odds
+    DistributionFactory.register_structured_odds(
+        registry=registry,
+        odds_structure={"race": {1: winning_odds}},
+        method="basic",  # Using basic odds conversion method
+    )
 
     # Step 3: Set up scoring calculator
     scorer = ScoringCalculator()
@@ -118,7 +129,7 @@ def main():
         driver_stats=rolling_averages,
     )
 
-    result = optimizer.optimize()
+    result = optimizer.optimize(race_format=RaceFormat.STANDARD)
 
     # Step 6: Output the best solution
     if result.best_solution:
