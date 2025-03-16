@@ -1,17 +1,88 @@
 """
-Factory for creating probability distributions from betting odds.
+Enhanced factory for creating probability distributions from betting odds.
 
 This module provides factory methods for creating F1 race probability
-distributions from structured betting odds data. It simplifies the process
-of converting market odds into position distributions for drivers across
-different race sessions.
+distributions from structured betting odds data, with improved handling of
+win-only probabilities using the Harville method.
 """
 
 from typing import Dict, List, Optional, Set
 
+import numpy as np
+
 from gridrival_ai.probabilities.conversion import ConverterFactory
 from gridrival_ai.probabilities.core import PositionDistribution
 from gridrival_ai.probabilities.registry import DistributionRegistry
+
+
+def harville_dp_from_win_probs(
+    win_probs: Dict[str, float], drivers: List[str]
+) -> Dict[str, Dict[int, float]]:
+    """
+    Compute grid probabilities using the Harville dynamic programming method.
+
+    This approach creates a grid where each driver's probabilities sum to 1.0 and
+    each position has exactly one driver, based solely on win probabilities.
+
+    Parameters
+    ----------
+    win_probs : Dict[str, float]
+        Dictionary mapping driver IDs to win probabilities
+    drivers : List[str]
+        List of driver IDs
+
+    Returns
+    -------
+    Dict[str, Dict[int, float]]
+        Nested dictionary mapping driver IDs to position probabilities
+
+    Notes
+    -----
+    The Harville method uses a dynamic programming approach to compute
+    the full grid of finishing positions given only win probabilities.
+    This approach ensures that:
+    1. Each driver's probabilities sum to 1.0
+    2. Each position has exactly one driver (probabilities sum to 1.0)
+    3. Relative strength ratios are preserved as much as possible
+    """
+    n = len(drivers)
+    # Extract win probabilities for each driver
+    strengths = np.array([win_probs.get(d, 0.001) for d in drivers])
+
+    # Normalize to ensure they sum to 1.0
+    strengths = strengths / np.sum(strengths)
+
+    # Initialize DP table
+    dp = np.zeros(1 << n)
+    full_mask = (1 << n) - 1
+    dp[full_mask] = 1.0
+
+    # Initialize result grid
+    # B[i, j] = probability that driver i finishes in position j+1
+    B = np.zeros((n, n))
+
+    # For each subset (mask), assign the finishing position
+    for mask in range(full_mask, -1, -1):
+        if dp[mask] == 0:
+            continue
+        available = [i for i in range(n) if mask & (1 << i)]
+        if not available:
+            continue
+        s = sum(strengths[i] for i in available)
+        pos = n - len(available)  # 0-indexed: pos=0 means 1st place
+        for i in available:
+            p_i = strengths[i] / (s + 1e-10)
+            prob = dp[mask] * p_i
+            B[i, pos] += prob
+            new_mask = mask & ~(1 << i)
+            dp[new_mask] += prob
+
+    # Convert to required output format
+    result = {}
+    for i, driver_id in enumerate(drivers):
+        result[driver_id] = {j + 1: float(B[i, j]) for j in range(n)}
+
+    return result
 
 
 class DistributionFactory:
@@ -90,6 +161,9 @@ class DistributionFactory:
         The position keys (1, 3, 6, etc.) represent finish position thresholds.
         For example, position 3 means odds of finishing in positions 1, 2, or 3.
         Multiple position thresholds are used to create more accurate distributions.
+
+        If only win odds (position 1) are available, the Harville dynamic programming
+        method is used to create a more realistic distribution of all positions.
         """
         result = {}
 
@@ -143,8 +217,8 @@ class DistributionFactory:
             if not session_data:
                 continue
 
-            # Process each threshold position
-            threshold_probs: Dict[int, Dict[str, float]] = {}
+            # First, convert odds to probabilities
+            threshold_probs = {}
             for position, odds_dict in session_data.items():
                 # Each position threshold should sum to the position value
                 # (e.g., for position 3, probabilities should sum to 3.0)
@@ -171,7 +245,7 @@ class DistributionFactory:
                 for i, driver_id in enumerate(valid_driver_ids):
                     threshold_probs[position][driver_id] = probs[i]
 
-            # Convert threshold probabilities to position distributions
+            # Create position distributions
             driver_dists = DistributionFactory._create_position_distributions(
                 threshold_probs, all_drivers, **kwargs
             )
@@ -201,21 +275,44 @@ class DistributionFactory:
         Dict[str, PositionDistribution]
             Dictionary mapping driver IDs to position distributions
         """
-        driver_dists = {}
+        thresholds = sorted(threshold_probs.keys())
 
-        # Maximum position we'll consider (can be adjusted as needed)
-        max_position = len(all_drivers)
-
-        # Get sorted thresholds
-        thresholds = sorted([t for t in threshold_probs.keys() if t <= max_position])
         if not thresholds:
             return {}
 
+        # Check if we only have win probabilities (threshold 1)
+        win_only = len(thresholds) == 1 and thresholds[0] == 1
+
+        if win_only:
+            # Use Harville DP approach for win-only data
+            return DistributionFactory._create_harville_distributions(
+                threshold_probs[1], all_drivers
+            )
+
+        # If we have multiple thresholds, use the original approach
+        driver_dists = {}
+
+        # Number of drivers determines the maximum possible position
+        num_drivers = len(all_drivers)
+
+        # Filter out thresholds that exceed the number of drivers
+        valid_thresholds = [t for t in thresholds if t <= num_drivers]
+        if not valid_thresholds:
+            # If no valid thresholds remain, default to Harville approach with position1
+            if 1 in threshold_probs:
+                return DistributionFactory._create_harville_distributions(
+                    threshold_probs[1], all_drivers
+                )
+            else:
+                return {}
+
+        # Maximum position is the number of drivers
+        max_position = num_drivers
+
         # Step 1: Extract cumulative probabilities for each driver at each threshold
-        # This maps driver_id -> position -> cumulative probability
         driver_cum_probs = {driver_id: {} for driver_id in all_drivers}
 
-        for threshold in thresholds:
+        for threshold in valid_thresholds:  # Use valid_thresholds instead of thresholds
             threshold_data = threshold_probs.get(threshold, {})
             for driver_id in all_drivers:
                 # Get probability for this driver at this threshold
@@ -287,6 +384,44 @@ class DistributionFactory:
                     # If validation fails, try without validation and normalize
                     dist = PositionDistribution(normalized, _validate=False)
                     driver_dists[driver_id] = dist.normalize()
+
+        return driver_dists
+
+    @staticmethod
+    def _create_harville_distributions(
+        win_probs: Dict[str, float], all_drivers: Set[str]
+    ) -> Dict[str, PositionDistribution]:
+        """
+        Create position distributions using the Harville dynamic programming approach.
+
+        This method is used when only win probabilities are available.
+
+        Parameters
+        ----------
+        win_probs : Dict[str, float]
+            Dictionary mapping driver IDs to win probabilities
+        all_drivers : Set[str]
+            Set of all driver IDs
+
+        Returns
+        -------
+        Dict[str, PositionDistribution]
+            Dictionary mapping driver IDs to position distributions
+        """
+        drivers = list(all_drivers)
+
+        # Use Harville DP function to create grid probabilities
+        position_probs = harville_dp_from_win_probs(win_probs, drivers)
+
+        # Convert to PositionDistribution objects
+        driver_dists = {}
+        for driver_id, probs in position_probs.items():
+            try:
+                driver_dists[driver_id] = PositionDistribution(probs)
+            except Exception:
+                # If validation fails, try without validation and normalize
+                dist = PositionDistribution(probs, _validate=False)
+                driver_dists[driver_id] = dist.normalize()
 
         return driver_dists
 
