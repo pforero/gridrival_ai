@@ -203,13 +203,13 @@ class DistributionFactory:
         """
         driver_dists = {}
 
+        # Maximum position we'll consider (can be adjusted as needed)
+        max_position = len(all_drivers)
+
         # Get sorted thresholds
-        thresholds = sorted(threshold_probs.keys())
+        thresholds = sorted([t for t in threshold_probs.keys() if t <= max_position])
         if not thresholds:
             return {}
-
-        # Maximum position we'll consider (can be adjusted as needed)
-        max_position = max(thresholds) * 2
 
         # Step 1: Extract cumulative probabilities for each driver at each threshold
         # This maps driver_id -> position -> cumulative probability

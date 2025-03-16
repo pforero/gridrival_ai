@@ -223,3 +223,53 @@ class TestDistributionFactory:
             assert "race" in distributions
             assert "VER" in distributions["race"]
             assert distributions["race"]["VER"].is_valid
+
+    def test_position_count_matches_driver_count(self):
+        """Test that the number of positions in distributions matches the number of
+        drivers."""
+        # Create odds structures with different numbers of drivers
+        driver_counts = [3, 5, 10, 20]
+
+        for count in driver_counts:
+            # Generate a dictionary of odds for the specified number of drivers
+            odds_dict = {f"D{i}": float(i + 2) for i in range(count)}
+            odds_structure = {"race": {1: odds_dict.copy()}}
+
+            distributions = DistributionFactory.from_structured_odds(odds_structure)
+
+            # Check that each driver's distribution has exactly 'count' positions
+            for driver_id, dist in distributions["race"].items():
+                assert len(dist.position_probs) == count
+                assert max(dist.position_probs.keys()) == count
+                assert min(dist.position_probs.keys()) == 1
+
+    def test_thresholds_above_driver_count_ignored(self):
+        """Test that thresholds higher than the number of drivers are ignored."""
+        # Create odds for 5 drivers
+        odds_dict = {f"D{i}": float(i + 2) for i in range(5)}
+
+        # Create a structure with thresholds both within and above driver count
+        odds_structure = {
+            "race": {
+                1: odds_dict.copy(),  # Valid threshold
+                3: odds_dict.copy(),  # Valid threshold
+                8: odds_dict.copy(),  # Invalid threshold (> 5 drivers)
+                10: odds_dict.copy(),  # Invalid threshold (> 5 drivers)
+            }
+        }
+
+        # Get the distributions
+        distributions = DistributionFactory.from_structured_odds(odds_structure)
+
+        # Verify the distributions have exactly 5 positions (matching driver count)
+        for driver_id, dist in distributions["race"].items():
+            assert dist.is_valid
+            assert len(dist.position_probs) == 5
+            assert max(dist.position_probs.keys()) == 5
+
+        # Directly test the threshold filtering by inspecting internal method behavior
+        # We can check this by looking at the structure of distributions
+        for dist in distributions["race"].values():
+            # If high thresholds were included, we'd see positions 6-10
+            for pos in range(6, 11):
+                assert pos not in dist.position_probs
