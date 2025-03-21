@@ -15,7 +15,10 @@ from gridrival_ai.points.components import (
     PositionPointsCalculator,
     TeammatePointsCalculator,
 )
-from gridrival_ai.probabilities.core import JointDistribution, PositionDistribution
+from gridrival_ai.probabilities.distributions import (
+    JointDistribution,
+    PositionDistribution,
+)
 
 
 class TestPositionPointsCalculator:

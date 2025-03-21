@@ -13,10 +13,9 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, cast
 
 from gridrival_ai.data.reference import CONSTRUCTORS
-from gridrival_ai.probabilities.core import (
+from gridrival_ai.probabilities.distributions import (  # create_independent_joint,
     JointDistribution,
     PositionDistribution,
-    create_independent_joint,
 )
 from gridrival_ai.probabilities.registry import DistributionRegistry
 
@@ -264,9 +263,9 @@ class DistributionAdapter:
 
         # Strategy 3: If all else fails, create an independent joint distribution
         # This is a fallback and may not capture the true correlation
-        return create_independent_joint(
-            qual_dist, race_dist, name1=session1, name2=session2
-        )
+        # return create_independent_joint(
+        #    qual_dist, race_dist, name1=session1, name2=session2
+        # )
 
     def get_completion_probability(
         self, driver_id: str, default: float = 0.95

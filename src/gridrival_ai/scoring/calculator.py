@@ -15,7 +15,10 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from gridrival_ai.probabilities.core import JointDistribution, PositionDistribution
+from gridrival_ai.probabilities.distributions import (
+    JointDistribution,
+    PositionDistribution,
+)
 from gridrival_ai.scoring.config import ScoringConfig
 from gridrival_ai.scoring.engine import ScoringEngine
 from gridrival_ai.scoring.types import (
@@ -65,7 +68,7 @@ class ScoringCalculator:
     Total points: 166.0
 
     >>> # Calculate with probability distributions
-    >>> from gridrival_ai.probabilities.core import PositionDistribution
+    >>> from gridrival_ai.probabilities.distributions import PositionDistribution
     >>> qual_dist = PositionDistribution({1: 0.6, 2: 0.4})
     >>> race_dist = PositionDistribution({1: 0.7, 2: 0.3})
     >>> expected = calculator.expected_driver_points(
@@ -266,7 +269,7 @@ class ScoringCalculator:
 
         Examples
         --------
-        >>> from gridrival_ai.probabilities.core import PositionDistribution
+        >>> from gridrival_ai.probabilities.distributions import PositionDistribution
         >>> calculator = ScoringCalculator()
         >>> # Create position distributions
         >>> qual_dist = PositionDistribution({1: 0.7, 2: 0.3})
@@ -356,7 +359,7 @@ class ScoringCalculator:
 
         Examples
         --------
-        >>> from gridrival_ai.probabilities.core import PositionDistribution
+        >>> from gridrival_ai.probabilities.distributions import PositionDistribution
         >>> calculator = ScoringCalculator()
         >>> # Create position distributions
         >>> driver1_qual = PositionDistribution({1: 0.7, 2: 0.3})
@@ -442,7 +445,7 @@ class ScoringCalculator:
         Examples
         --------
         >>> import numpy as np
-        >>> from gridrival_ai.probabilities.core import PositionDistribution
+        >>> from gridrival_ai.probabilities.distributions import PositionDistribution
         >>> calculator = ScoringCalculator()
         >>> qual_dist = PositionDistribution({1: 0.7, 2: 0.3})
         >>> race_dist = PositionDistribution({1: 0.6, 2: 0.4})

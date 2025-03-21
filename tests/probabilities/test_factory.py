@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from gridrival_ai.probabilities.core import PositionDistribution
+from gridrival_ai.probabilities.distributions import PositionDistribution
 from gridrival_ai.probabilities.factory import DistributionFactory
 from gridrival_ai.probabilities.registry import DistributionRegistry
 

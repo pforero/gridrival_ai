@@ -19,7 +19,10 @@ from gridrival_ai.points.components import (
 )
 from gridrival_ai.points.distributions import DistributionAdapter
 from gridrival_ai.points.driver import DriverPointsCalculator
-from gridrival_ai.probabilities.core import JointDistribution, PositionDistribution
+from gridrival_ai.probabilities.distributions import (
+    JointDistribution,
+    PositionDistribution,
+)
 from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.types import RaceFormat
 

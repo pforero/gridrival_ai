@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Set
 import numpy as np
 
 from gridrival_ai.probabilities.conversion import ConverterFactory
-from gridrival_ai.probabilities.core import PositionDistribution
+from gridrival_ai.probabilities.distributions import PositionDistribution
 from gridrival_ai.probabilities.registry import DistributionRegistry
 
 

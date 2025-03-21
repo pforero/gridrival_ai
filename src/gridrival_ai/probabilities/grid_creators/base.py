@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
-from gridrival_ai.probabilities.core import PositionDistribution
+from gridrival_ai.probabilities.distributions import PositionDistribution
 from gridrival_ai.probabilities.normalizers.base import GridNormalizer
 from gridrival_ai.probabilities.normalizers.factory import get_grid_normalizer
 from gridrival_ai.probabilities.odds_converters import BasicConverter, OddsConverter

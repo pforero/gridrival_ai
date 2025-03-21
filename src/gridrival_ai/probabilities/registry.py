@@ -16,7 +16,7 @@ Examples
 >>> registry = DistributionRegistry()
 >>>
 >>> # Register a position distribution for a driver
->>> from gridrival_ai.probabilities.core import PositionDistribution
+>>> from gridrival_ai.probabilities.distributions import PositionDistribution
 >>> dist = PositionDistribution({1: 0.6, 2: 0.4})
 >>> registry.register("VER", "qualifying", dist)
 >>>
@@ -35,7 +35,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from gridrival_ai.probabilities.core import (
+from gridrival_ai.probabilities.distributions import (
     Distribution,
     JointDistribution,
     PositionDistribution,
@@ -60,7 +60,7 @@ class DistributionRegistry:
     Examples
     --------
     >>> registry = DistributionRegistry()
-    >>> from gridrival_ai.probabilities.core import PositionDistribution
+    >>> from gridrival_ai.probabilities.distributions import PositionDistribution
     >>> dist = PositionDistribution({1: 0.6, 2: 0.4})
     >>> registry.register("VER", "qualifying", dist)
     >>> registry.get("VER", "qualifying")[1]
@@ -87,7 +87,7 @@ class DistributionRegistry:
         Examples
         --------
         >>> registry = DistributionRegistry()
-        >>> from gridrival_ai.probabilities.core import PositionDistribution
+        >>> from gridrival_ai.probabilities.distributions import PositionDistribution
         >>> dist = PositionDistribution({1: 0.6, 2: 0.4})
         >>> registry.register("VER", "qualifying", dist)
         """
@@ -233,7 +233,7 @@ class DistributionRegistry:
         >>> registry.has("VER", "qualifying")
         False
         >>> # Register a distribution
-        >>> from gridrival_ai.probabilities.core import PositionDistribution
+        >>> from gridrival_ai.probabilities.distributions import PositionDistribution
         >>> dist = PositionDistribution({1: 0.6, 2: 0.4})
         >>> registry.register("VER", "qualifying", dist)
         >>> registry.has("VER", "qualifying")
@@ -261,7 +261,7 @@ class DistributionRegistry:
         --------
         >>> registry = DistributionRegistry()
         >>> # Register distributions
-        >>> from gridrival_ai.probabilities.core import PositionDistribution
+        >>> from gridrival_ai.probabilities.distributions import PositionDistribution
         >>> dist = PositionDistribution({1: 0.6, 2: 0.4})
         >>> registry.register("VER", "qualifying", dist)
         >>> registry.register("HAM", "race", dist)
@@ -296,7 +296,7 @@ class DistributionRegistry:
         --------
         >>> registry = DistributionRegistry()
         >>> # Register distributions
-        >>> from gridrival_ai.probabilities.core import PositionDistribution
+        >>> from gridrival_ai.probabilities.distributions import PositionDistribution
         >>> dist = PositionDistribution({1: 0.6, 2: 0.4})
         >>> registry.register("VER", "qualifying", dist)
         >>> registry.register("VER", "race", dist)
@@ -326,7 +326,7 @@ class DistributionRegistry:
         --------
         >>> registry = DistributionRegistry()
         >>> # Register distributions
-        >>> from gridrival_ai.probabilities.core import PositionDistribution
+        >>> from gridrival_ai.probabilities.distributions import PositionDistribution
         >>> dist = PositionDistribution({1: 0.6, 2: 0.4})
         >>> registry.register("VER", "qualifying", dist)
         >>> registry.clear()

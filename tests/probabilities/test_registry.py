@@ -2,7 +2,10 @@
 
 import pytest
 
-from gridrival_ai.probabilities.core import JointDistribution, PositionDistribution
+from gridrival_ai.probabilities.distributions import (
+    JointDistribution,
+    PositionDistribution,
+)
 from gridrival_ai.probabilities.registry import DistributionRegistry
 
 

@@ -15,7 +15,7 @@ from gridrival_ai.probabilities.conversion import (
     odds_to_grid,
     odds_to_position_distribution,
 )
-from gridrival_ai.probabilities.core import PositionDistribution
+from gridrival_ai.probabilities.distributions import PositionDistribution
 
 
 class TestConverterFactory:

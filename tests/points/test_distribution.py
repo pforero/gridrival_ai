@@ -10,7 +10,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from gridrival_ai.points.distributions import DistributionAdapter
-from gridrival_ai.probabilities.core import JointDistribution, PositionDistribution
+from gridrival_ai.probabilities.distributions import (
+    JointDistribution,
+    PositionDistribution,
+)
 from gridrival_ai.probabilities.registry import DistributionRegistry
 
 

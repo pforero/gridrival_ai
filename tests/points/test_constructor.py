@@ -12,7 +12,7 @@ import pytest
 
 from gridrival_ai.points.constructor import ConstructorPointsCalculator
 from gridrival_ai.points.distributions import DistributionAdapter
-from gridrival_ai.probabilities.core import PositionDistribution
+from gridrival_ai.probabilities.distributions import PositionDistribution
 from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.types import RaceFormat
 

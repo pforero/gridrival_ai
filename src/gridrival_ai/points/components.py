@@ -13,7 +13,7 @@ those distributions.
 Examples
 --------
 >>> # Calculate position-based points
->>> from gridrival_ai.probabilities.core import PositionDistribution
+>>> from gridrival_ai.probabilities.distributions import PositionDistribution
 >>> position_dist = PositionDistribution({1: 0.6, 2: 0.4})
 >>> points_table = np.array([0, 25, 18])  # 0-indexed, P1=25, P2=18
 >>> calculator = PositionPointsCalculator()
@@ -25,7 +25,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from gridrival_ai.probabilities.core import JointDistribution, PositionDistribution
+from gridrival_ai.probabilities.distributions import (
+    JointDistribution,
+    PositionDistribution,
+)
 
 
 class PositionPointsCalculator:

@@ -32,7 +32,7 @@ Examples
 [0.6666666666666666, 0.3333333333333333, 0.16666666666666666]
 
 >>> # Create position distribution from odds
->>> from gridrival_ai.probabilities.core import PositionDistribution
+>>> from gridrival_ai.probabilities.distributions import PositionDistribution
 >>> dist = odds_to_position_distribution(odds, method='basic')
 >>> dist[1]  # Probability of P1
 0.5714285714285714
@@ -42,16 +42,18 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Type, Union
 
-from gridrival_ai.probabilities.converters import (
-    BasicConverter,
+from gridrival_ai.probabilities.distributions.position import PositionDistribution
+from gridrival_ai.probabilities.grid_creators import (
     CumulativeMarketConverter,
-    HarvilleConverter,
+    HarvilleGridCreator,
+)
+from gridrival_ai.probabilities.odds_converters import (
+    BasicConverter,
     OddsRatioConverter,
     PowerConverter,
     ShinsConverter,
 )
-from gridrival_ai.probabilities.converters.odds_converter import OddsConverter
-from gridrival_ai.probabilities.core import PositionDistribution
+from gridrival_ai.probabilities.odds_converters.base import OddsConverter
 
 
 class ConverterFactory:
@@ -90,7 +92,7 @@ class ConverterFactory:
         "odds_ratio": OddsRatioConverter,
         "shin": ShinsConverter,
         "power": PowerConverter,
-        "harville": HarvilleConverter,
+        "harville": HarvilleGridCreator,
         "cumulative": CumulativeMarketConverter,
     }
 
@@ -224,7 +226,7 @@ def odds_to_grid(
     >>> grid["VER"][1]  # Probability VER finishes P1
     0.6666666666666667
     """
-    converter = HarvilleConverter(**kwargs)
+    converter = HarvilleGridCreator(**kwargs)
     return converter.convert_to_grid(odds, driver_ids)
 
 
@@ -258,6 +260,6 @@ def odds_to_distributions(
     >>> dists["VER"][1]  # Probability VER finishes P1
     0.6666666666666667
     """
-    converter = HarvilleConverter(**kwargs)
+    converter = HarvilleGridCreator(**kwargs)
     grid = converter.convert_to_grid(odds, driver_ids)
     return converter.grid_to_position_distributions(grid)
