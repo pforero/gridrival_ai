@@ -9,11 +9,7 @@ import pytest
 from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.config import ScoringConfig
 from gridrival_ai.scoring.engine import ScoringEngine
-from gridrival_ai.scoring.types import (
-    DriverPositions,
-    DriverWeekendData,
-    RaceFormat,
-)
+from gridrival_ai.scoring.types import DriverPositions, DriverWeekendData, RaceFormat
 
 
 @pytest.fixture
