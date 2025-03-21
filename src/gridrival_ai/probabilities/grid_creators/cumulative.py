@@ -205,6 +205,9 @@ class CumulativeGridCreator(GridCreator):
         """
         Fall back to Harville method for win-only probabilities.
 
+        This implementation calculates the exact probabilities for each driver finishing
+        in each position according to the Harville model using dynamic programming.
+
         Parameters
         ----------
         win_probs : np.ndarray
@@ -229,44 +232,134 @@ class CumulativeGridCreator(GridCreator):
             grid[driver_ids[0]] = {1: 1.0}
             return {driver_ids[0]: PositionDistribution(grid[driver_ids[0]])}
 
-        # Initialize DP table (similar to HarvilleGridCreator._harville_dp)
+        # ---------- Dynamic Programming Approach ----------
+        # We use a "state" to represent which drivers are still available.
+        # Each driver is represented by a bit in the state:
+        # - bit is 1 if driver is available
+        # - bit is 0 if driver is already assigned a position
+
+        # Initialize DP table with zeros
         dp = np.zeros(1 << n)
-        full_mask = (1 << n) - 1
-        dp[full_mask] = 1.0  # Initially all drivers available
 
-        # Iterate over all subsets (masks) from full set down to empty
-        for mask in range(full_mask, -1, -1):
-            if dp[mask] == 0:
-                continue  # Skip states with zero probability
+        # Start with all drivers available (all bits set to 1)
+        full_mask = (1 << n) - 1  # e.g., for n=3: 2^3 - 1 = 7 = 111 binary
+        dp[full_mask] = 1.0  # Probability of starting state is 1.0
 
-            # Get available drivers in this state
-            available = [i for i in range(n) if mask & (1 << i)]
-            if not available:
+        # Process all states from all drivers available down to none
+        for state in range(full_mask, -1, -1):
+            # Skip states with zero probability
+            if dp[state] == 0:
+                continue
+
+            # Determine which drivers are still available in this state
+            available_drivers = self._get_available_drivers(state, n)
+
+            # Skip if no drivers are available (shouldn't happen, but for safety)
+            if not available_drivers:
                 continue
 
             # Current position to assign (1-indexed)
-            pos = n - len(available) + 1
+            current_position = n - len(available_drivers) + 1
 
-            # Sum of strengths of available drivers
-            s = sum(win_probs[i] for i in available)
+            # Calculate sum of win probabilities for available drivers
+            total_available_prob = sum(win_probs[i] for i in available_drivers)
 
-            # Assign probabilities for this position
-            for i in available:
-                p_i = win_probs[i] / (s + 1e-10)  # Avoid division by zero
-                prob = dp[mask] * p_i
-
-                # Update grid
-                grid[driver_ids[i]][pos] = grid[driver_ids[i]].get(pos, 0.0) + prob
-
-                # Update DP table for next state (driver i is removed)
-                new_mask = mask & ~(1 << i)
-                dp[new_mask] += prob
+            # Process each available driver
+            self._process_available_drivers(
+                state,
+                available_drivers,
+                current_position,
+                win_probs,
+                driver_ids,
+                total_available_prob,
+                dp,
+                grid,
+            )
 
         # Convert grid to PositionDistribution objects
         return {
             driver_id: PositionDistribution(positions)
             for driver_id, positions in grid.items()
         }
+
+    def _get_available_drivers(self, state: int, n: int) -> list[int]:
+        """
+        Get indices of available drivers from a state bit mask.
+
+        Parameters
+        ----------
+        state : int
+            Bit mask representing available drivers
+        n : int
+            Total number of drivers
+
+        Returns
+        -------
+        list[int]
+            Indices of available drivers
+        """
+        available_drivers = []
+        for i in range(n):
+            if state & (1 << i):  # Check if i-th bit is set
+                available_drivers.append(i)
+        return available_drivers
+
+    def _process_available_drivers(
+        self,
+        state: int,
+        available_drivers: list[int],
+        current_position: int,
+        win_probs: np.ndarray,
+        driver_ids: list[str],
+        total_available_prob: float,
+        dp: np.ndarray,
+        grid: Dict[str, Dict[int, float]],
+    ) -> None:
+        """
+        Process available drivers for the current state and position.
+
+        Parameters
+        ----------
+        state : int
+            Current state bit mask
+        available_drivers : list[int]
+            Indices of available drivers
+        current_position : int
+            Current position to assign
+        win_probs : np.ndarray
+            Array of win probabilities
+        driver_ids : list[str]
+            List of driver IDs
+        total_available_prob : float
+            Sum of win probabilities for available drivers
+        dp : np.ndarray
+            Dynamic programming table
+        grid : Dict[str, Dict[int, float]]
+            Position probability grid to update
+        """
+        # Assign probabilities for the current position
+        for driver_idx in available_drivers:
+            # Skip if driver has zero probability
+            if win_probs[driver_idx] <= 0:
+                continue
+
+            # Harville model: probability proportional to win probability
+            conditional_prob = win_probs[driver_idx] / (total_available_prob + 1e-10)
+
+            # Overall probability: current state probability × conditional probability
+            position_prob = dp[state] * conditional_prob
+
+            # Update the grid for this driver and position
+            driver_id = driver_ids[driver_idx]
+            grid[driver_id][current_position] = (
+                grid[driver_id].get(current_position, 0.0) + position_prob
+            )
+
+            # Compute next state by removing this driver
+            next_state = state & ~(1 << driver_idx)
+
+            # Add probability to next state in DP table
+            dp[next_state] += position_prob
 
     def _convert_cumulative_to_position_distributions(
         self, cumulative_probs: Dict[int, Dict[str, float]], driver_ids: List[str]
@@ -330,6 +423,7 @@ class CumulativeGridCreator(GridCreator):
         self,
         driver_id: str,
         cumulative_probs: Dict[int, Dict[str, float]],
+        raise_on_missing: bool = False,
     ) -> tuple[Dict[int, float], float]:
         """
         Extract cumulative probabilities for a driver with validation.
@@ -340,11 +434,18 @@ class CumulativeGridCreator(GridCreator):
             Driver ID
         cumulative_probs : Dict[int, Dict[str, float]]
             Nested dictionary of cumulative probabilities
+        raise_on_missing : bool, optional
+            Whether to raise an exception on missing probabilities, by default False
 
         Returns
         -------
         tuple[Dict[int, float], float]
             Dictionary mapping thresholds to probabilities and driver quality estimate
+
+        Raises
+        ------
+        ValueError
+            If driver has no probabilities and raise_on_missing is True
         """
         thresholds = sorted(cumulative_probs.keys())
         driver_probs = {}
@@ -356,12 +457,23 @@ class CumulativeGridCreator(GridCreator):
 
         # Ensure we have at least one probability
         if not driver_probs:
-            # If no probabilities available, set a small default win probability
-            # and full probability for max position
-            driver_probs[1] = 0.01  # Small default win probability
+            error_msg = (
+                f"No probabilities found for driver {driver_id}. "
+                f"Available thresholds: {thresholds}. "
+                f"Check if driver ID is correct or if odds data is complete."
+            )
+
+            if raise_on_missing:
+                raise ValueError(error_msg)
+
+            # If not raising, set default probabilities with warning
+            default_win_prob = 0.01  # Small default win probability
+            driver_probs[1] = default_win_prob
             driver_probs[self.max_position] = 1.0
+
             warnings.warn(
-                f"No probabilities found for driver {driver_id}. Using defaults."
+                f"{error_msg} Using defaults: win={default_win_prob}, "
+                f"max={self.max_position}=1.0"
             )
 
         # Estimate driver quality based on win probability or early cumulative markets
@@ -395,7 +507,10 @@ class CumulativeGridCreator(GridCreator):
         return ordered_probs, driver_quality
 
     def _convert_driver_probs(
-        self, driver_cum_probs: Dict[int, float], driver_quality: float
+        self,
+        driver_cum_probs: Dict[int, float],
+        driver_quality: float,
+        strict_monotonicity: bool = False,
     ) -> Dict[int, float]:
         """
         Convert cumulative probabilities to position-specific probabilities.
@@ -406,11 +521,18 @@ class CumulativeGridCreator(GridCreator):
             Dictionary mapping thresholds to cumulative probabilities
         driver_quality : float
             Measure of driver quality (0 to 1)
+        strict_monotonicity : bool, optional
+            Whether to raise errors on non-increasing probabilities, by default False
 
         Returns
         -------
         Dict[int, float]
             Dictionary mapping positions to probabilities
+
+        Raises
+        ------
+        ValueError
+            If strict_monotonicity is True and non-increasing probabilities are detected
         """
         # Sort thresholds
         sorted_thresholds = sorted(driver_cum_probs.keys())
@@ -419,6 +541,7 @@ class CumulativeGridCreator(GridCreator):
         # Process each segment defined by thresholds
         prev_threshold = 0
         prev_cum_prob = 0.0
+        monotonicity_issues = []
 
         for threshold in sorted_thresholds:
             cum_prob = driver_cum_probs[threshold]
@@ -426,12 +549,20 @@ class CumulativeGridCreator(GridCreator):
             # Probability mass for this segment
             segment_prob = cum_prob - prev_cum_prob
 
-            # Skip if no probability in this segment
+            # Handle non-increasing probabilities
             if segment_prob <= 0:
-                warnings.warn(
+                issue = (
                     f"Non-increasing probabilities detected for thresholds "
-                    f"{prev_threshold} to {threshold}. Skipping segment."
+                    f"{prev_threshold} to {threshold}. "
+                    f"Values: {prev_cum_prob} -> {cum_prob}. "
+                    f"This may indicate inconsistent market data."
                 )
+                monotonicity_issues.append(issue)
+
+                if strict_monotonicity:
+                    raise ValueError(issue)
+
+                warnings.warn(issue + " Skipping segment.")
                 prev_threshold = threshold
                 prev_cum_prob = cum_prob
                 continue
@@ -441,13 +572,12 @@ class CumulativeGridCreator(GridCreator):
             end_pos = threshold
 
             # Get baseline weights for this segment
-            # Regular segments use normal weighting
             if threshold != self.max_position or prev_threshold == 0:
                 baseline_weights = self._get_baseline_weights(
                     start_pos, end_pos, prev_cum_prob, driver_cum_probs
                 )
             else:
-                # Special case for the tail segment (after last known threshold)
+                # Special case for the tail segment
                 baseline_weights = self._get_tail_weights(
                     start_pos, end_pos, driver_quality
                 )
@@ -464,10 +594,17 @@ class CumulativeGridCreator(GridCreator):
             prev_threshold = threshold
             prev_cum_prob = cum_prob
 
-        # Ensure all positions have a probability (even if very small)
+        # Ensure all positions have a probability
         for pos in range(1, self.max_position + 1):
             if pos not in position_probs:
                 position_probs[pos] = 1e-10  # Very small but non-zero probability
+
+        # Report monotonicity issues if any
+        if monotonicity_issues and not strict_monotonicity:
+            warnings.warn(
+                f"Detected {len(monotonicity_issues)} monotonicity issues in "
+                f"cumulative probabilities. This may affect distribution quality."
+            )
 
         return position_probs
 
@@ -615,8 +752,12 @@ class CumulativeGridCreator(GridCreator):
             # If no valid probabilities, create uniform distribution
             return {i: 1.0 / self.max_position for i in range(1, self.max_position + 1)}
         return {k: v / total for k, v in probs.items()}
+
     def _ensure_column_constraints(
-        self, distributions: Dict[str, PositionDistribution]
+        self,
+        distributions: Dict[str, PositionDistribution],
+        tolerance: float = 1e-5,
+        max_iterations: int = 100,
     ) -> Dict[str, PositionDistribution]:
         """
         Ensure each position has probability sum = 1.0 across all drivers.
@@ -629,6 +770,10 @@ class CumulativeGridCreator(GridCreator):
         ----------
         distributions : Dict[str, PositionDistribution]
             Dictionary mapping driver IDs to position distributions
+        tolerance : float, optional
+            Convergence tolerance threshold, by default 1e-5
+        max_iterations : int, optional
+            Maximum number of iterations, by default 100
 
         Returns
         -------
@@ -657,9 +802,13 @@ class CumulativeGridCreator(GridCreator):
             # Scale win probabilities to sum to 1.0
             original_win_probs = original_win_probs / win_sum
 
-        # Iterative proportional fitting (preserving win probabilities)
-        max_iterations = 10
-        for _ in range(max_iterations):
+        # Iterative proportional fitting with convergence tracking
+        iteration = 0
+        max_change = float("inf")
+
+        while max_change > tolerance and iteration < max_iterations:
+            P_old = P.copy()
+
             # Row normalization
             row_sums = P.sum(axis=1, keepdims=True)
             P = P / np.where(row_sums > 0, row_sums, 1.0)
@@ -681,6 +830,20 @@ class CumulativeGridCreator(GridCreator):
                 if row_sum > 0:
                     P[i, 1:] = P[i, 1:] * (remaining_prob / row_sum)
 
+            # Calculate maximum change
+            max_change = np.max(np.abs(P - P_old))
+            iteration += 1
+
+        # Log convergence info if available
+        if hasattr(self, "logger"):
+            if max_change <= tolerance:
+                self.logger.debug(f"Convergence reached after {iteration} iterations")
+            else:
+                self.logger.warning(
+                    f"Failed to converge after {max_iterations} iterations. "
+                    f"Final max change: {max_change:.6f}"
+                )
+
         # Convert back to PositionDistribution objects
         result = {}
         for i, driver in enumerate(drivers):
@@ -692,4 +855,3 @@ class CumulativeGridCreator(GridCreator):
             ).normalize()
 
         return result
-
