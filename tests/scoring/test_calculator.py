@@ -3,7 +3,10 @@
 import numpy as np
 import pytest
 
-from gridrival_ai.probabilities.core import JointDistribution, PositionDistribution
+from gridrival_ai.probabilities.distributions import (
+    JointDistribution,
+    PositionDistribution,
+)
 from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.config import ScoringConfig
 from gridrival_ai.scoring.types import (
