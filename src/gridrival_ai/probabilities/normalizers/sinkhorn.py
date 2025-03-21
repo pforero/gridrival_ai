@@ -7,10 +7,6 @@ using the Sinkhorn-Knopp algorithm for biproportional fitting.
 
 import numpy as np
 
-from gridrival_ai.probabilities.distributions import (
-    PositionDistribution,
-    SessionDistribution,
-)
 from gridrival_ai.probabilities.normalizers.base import GridNormalizer
 
 
@@ -30,23 +26,15 @@ class SinkhornNormalizer(GridNormalizer):
 
     Examples
     --------
+    >>> import numpy as np
     >>> normalizer = SinkhornNormalizer()
-    >>> driver_distributions = {
-    ...     "VER": PositionDistribution({1: 0.7, 2: 0.3}),
-    ...     "HAM": PositionDistribution({1: 0.4, 2: 0.6})
-    ... }
-    >>> session = SessionDistribution(driver_distributions, "race")
-    >>> normalized = normalizer.normalize(session)
+    >>> # Create a 2x2 probability matrix
+    >>> matrix = np.array([[0.7, 0.3], [0.4, 0.6]])
+    >>> normalized = normalizer.normalize(matrix)
     >>> # P1 and P2 now sum to 1.0 across drivers
-    >>> (
-    >>>     normalized.get_driver_distribution("VER")[1]
-    >>>     + normalized.get_driver_distribution("HAM")[1]
-    >>> )
+    >>> normalized[:, 0].sum()
     1.0
-    >>> (
-    >>>     normalized.get_driver_distribution("VER")[2]
-    >>>     + normalized.get_driver_distribution("HAM")[2]
-    >>> )
+    >>> normalized[:, 1].sum()
     1.0
     """
 
@@ -64,76 +52,58 @@ class SinkhornNormalizer(GridNormalizer):
         self.max_iter = max_iter
         self.tolerance = tolerance
 
-    def normalize(self, session: SessionDistribution) -> SessionDistribution:
+    def normalize(self, matrix: np.ndarray) -> np.ndarray:
         """
-        Normalize distributions using Sinkhorn-Knopp algorithm.
+        Normalize matrix using Sinkhorn-Knopp algorithm.
 
         Parameters
         ----------
-        session : SessionDistribution
-            Session distribution containing driver position distributions
+        matrix : np.ndarray
+            2D probability matrix where rows represent drivers and columns positions
 
         Returns
         -------
-        SessionDistribution
-            Normalized session distribution satisfying both row and column constraints
+        np.ndarray
+            Normalized matrix satisfying both row and column constraints
+
+        Raises
+        ------
+        ValueError
+            If the matrix is not square or contains values outside the range [0, 1]
         """
-        distributions = session.driver_distributions
-        session_type = session.session_type
+        if matrix.size == 0:
+            return matrix
 
-        if not distributions:
-            return SessionDistribution({}, session_type)
+        # Check that matrix is square
+        if matrix.shape[0] != matrix.shape[1]:
+            raise ValueError(f"Input matrix must be square, got shape {matrix.shape}")
 
-        # Get all drivers
-        all_drivers = list(distributions.keys())
+        # Check that all values are between 0 and 1
+        if np.any(matrix < 0) or np.any(matrix > 1):
+            raise ValueError("All values in the input matrix must be between 0 and 1")
 
-        # Get all positions (assuming all drivers have the same positions available)
-        all_positions = set()
-        for dist in distributions.values():
-            all_positions.update(dist.position_probs.keys())
-        all_positions = sorted(all_positions)
-
-        # Create matrix representation
-        matrix = np.zeros((len(all_drivers), len(all_positions)))
-        pos_to_idx = {pos: idx for idx, pos in enumerate(all_positions)}
-
-        for i, driver_id in enumerate(all_drivers):
-            for pos, prob in distributions[driver_id].position_probs.items():
-                j = pos_to_idx[pos]
-                matrix[i, j] = prob
+        # Make a copy to avoid modifying the input
+        result = matrix.copy()
 
         # Apply Sinkhorn-Knopp algorithm
         for _ in range(self.max_iter):
             # Normalize rows
-            row_sums = matrix.sum(axis=1, keepdims=True)
+            row_sums = result.sum(axis=1, keepdims=True)
             # Avoid division by zero
             row_sums[row_sums == 0] = 1.0
-            matrix = matrix / row_sums
+            result = result / row_sums
 
             # Normalize columns
-            col_sums = matrix.sum(axis=0, keepdims=True)
+            col_sums = result.sum(axis=0, keepdims=True)
             # Avoid division by zero
             col_sums[col_sums == 0] = 1.0
-            matrix = matrix / col_sums
+            result = result / col_sums
 
             # Check convergence
-            row_deviation = np.abs(matrix.sum(axis=1) - 1.0).max()
-            col_deviation = np.abs(matrix.sum(axis=0) - 1.0).max()
+            row_deviation = np.abs(result.sum(axis=1) - 1.0).max()
+            col_deviation = np.abs(result.sum(axis=0) - 1.0).max()
 
             if row_deviation < self.tolerance and col_deviation < self.tolerance:
                 break
 
-        # Convert back to PositionDistribution objects
-        result = {}
-        for i, driver_id in enumerate(all_drivers):
-            position_probs = {}
-            for j, pos in enumerate(all_positions):
-                if matrix[i, j] > 0:
-                    position_probs[pos] = matrix[i, j]
-
-            # Create PositionDistribution with validation turned off
-            # since the values might be very close to 1.0 but not exactly
-            result[driver_id] = PositionDistribution(position_probs, _validate=False)
-
-        # Return a new SessionDistribution with the normalized driver distributions
-        return SessionDistribution(result, session_type, _validate=False)
+        return result

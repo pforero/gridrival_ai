@@ -7,7 +7,7 @@ row and column constraints on grid probability distributions.
 
 from abc import ABC, abstractmethod
 
-from gridrival_ai.probabilities.distributions import SessionDistribution
+import numpy as np
 
 
 class GridNormalizer(ABC):
@@ -17,21 +17,26 @@ class GridNormalizer(ABC):
     Normalizers enforce constraints on grid probability distributions,
     such as ensuring that each driver's probabilities sum to 1.0 (row constraint)
     and each position's probabilities sum to 1.0 across all drivers (column constraint).
+
+    The normalization is performed on a matrix where:
+    - Rows represent drivers
+    - Columns represent positions
+    - Each entry represents the probability of a driver finishing in a position
     """
 
     @abstractmethod
-    def normalize(self, distributions: SessionDistribution) -> SessionDistribution:
+    def normalize(self, matrix: np.ndarray) -> np.ndarray:
         """
-        Normalize a set of position distributions.
+        Normalize a probability matrix.
 
         Parameters
         ----------
-        distributions : SessionDistribution
-            Dictionary mapping driver IDs to position distributions
+        matrix : np.ndarray
+            2D probability matrix where rows represent drivers and columns positions
 
         Returns
         -------
-        SessionDistribution
-            Normalized distributions
+        np.ndarray
+            Normalized matrix satisfying both row and column constraints
         """
         pass

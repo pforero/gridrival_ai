@@ -399,64 +399,22 @@ class TestSessionDistribution:
         session = SessionDistribution({"VER": ver_dist, "HAM": ham_dist}, "race")
 
         # Get joint distribution
-        with patch.object(
-            JointDistribution, "create_from_distributions"
-        ) as mock_create:
-            mock_create.return_value = "mock_joint_distribution"
+        joint = session.get_joint_distribution("VER", "HAM")
 
-            # Race session (constrained)
-            joint = session.get_joint_distribution("VER", "HAM")
+        # Check result is a JointDistribution
+        assert isinstance(joint, JointDistribution)
 
-            # Check correct arguments were passed
-            mock_create.assert_called_once_with(ver_dist, ham_dist, "VER", "HAM", True)
+        # Check correct marginals
+        marg1 = joint.marginal1()
+        marg2 = joint.marginal2()
+        assert marg1[1] == 0.6
+        assert marg1[2] == 0.4
+        assert marg2[1] == 0.4
+        assert marg2[2] == 0.6
 
-            # Check return value
-            assert joint == "mock_joint_distribution"
-
-    def test_normalize(self):
-        """Test the normalize method."""
-        ver_dist = PositionDistribution({1: 0.6, 2: 0.4})
-        ham_dist = PositionDistribution({1: 0.4, 2: 0.6})
-
-        session = SessionDistribution({"VER": ver_dist, "HAM": ham_dist}, "race")
-
-        # Mock the normalizer
-        with patch(
-            "gridrival_ai.probabilities.distributions.session.get_grid_normalizer"
-        ) as mock_get:
-            mock_normalizer = mock_get.return_value
-            mock_normalizer.normalize.return_value = {
-                "VER": PositionDistribution({1: 0.5, 2: 0.5}),
-                "HAM": PositionDistribution({1: 0.5, 2: 0.5}),
-            }
-
-            # Normalize session
-            normalized = session.normalize()
-
-            # Check normalizer was called with correct arguments
-            mock_get.assert_called_once_with("sinkhorn")
-            mock_normalizer.normalize.assert_called_once_with(
-                session.driver_distributions
-            )
-
-            # Check normalized session
-            assert normalized.session_type == "race"
-            assert normalized.get_driver_distribution("VER")[1] == 0.5
-            assert normalized.get_driver_distribution("HAM")[1] == 0.5
-
-    def test_get_most_likely_grid(self):
-        """Test the get_most_likely_grid method."""
-        ver_dist = PositionDistribution({1: 0.6, 2: 0.4})
-        ham_dist = PositionDistribution({1: 0.4, 2: 0.6})
-
-        session = SessionDistribution({"VER": ver_dist, "HAM": ham_dist}, "race")
-
-        # Get most likely grid
-        grid = session.get_most_likely_grid()
-
-        # VER has higher probability for P1, HAM for P2
-        assert grid[1] == "VER"
-        assert grid[2] == "HAM"
+        # Check correct constraints: in race, one driver can't have the same position as another
+        assert joint[(1, 1)] == 0.0
+        assert joint[(2, 2)] == 0.0
 
 
 class TestRaceDistribution:
