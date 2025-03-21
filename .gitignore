@@ -74,4 +74,4 @@ Thumbs.db
 
 instructions/
 *.vscode
-examples/*.ipynb
+#examples/*.ipynb
