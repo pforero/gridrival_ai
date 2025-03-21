@@ -6,7 +6,7 @@ import pytest
 from gridrival_ai.probabilities.conversion import (
     BasicConverter,
     ConverterFactory,
-    HarvilleConverter,
+    HarvilleGridCreator,
     OddsConverter,
     OddsRatioConverter,
     PowerConverter,
@@ -34,7 +34,7 @@ class TestConverterFactory:
             OddsRatioConverter,
             ShinsConverter,
             PowerConverter,
-            HarvilleConverter,
+            HarvilleGridCreator,
         ]
 
         for method, expected_type in zip(methods, expected_types):

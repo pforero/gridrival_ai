@@ -336,3 +336,87 @@ class JointDistribution:
         normalized = {k: v / total for k, v in joint_probs.items()}
 
         return cls(normalized, entity1_name=entity1_name, entity2_name=entity2_name)
+
+
+def create_independent_joint(
+    dist1: PositionDistribution,
+    dist2: PositionDistribution,
+    name1: str = "var1",
+    name2: str = "var2",
+) -> JointDistribution:
+    """
+    Create an independent joint distribution between two distributions.
+
+    This function creates a joint distribution assuming independence
+    between the two variables. Each joint probability is the product of
+    the corresponding marginal probabilities.
+
+    Parameters
+    ----------
+    dist1 : PositionDistribution
+        First distribution
+    dist2 : PositionDistribution
+        Second distribution
+    name1 : str, optional
+        Name of first entity, by default "var1"
+    name2 : str, optional
+        Name of second entity, by default "var2"
+
+    Returns
+    -------
+    JointDistribution
+        Independent joint distribution
+
+    Examples
+    --------
+    >>> dist1 = PositionDistribution({1: 0.7, 2: 0.3})
+    >>> dist2 = PositionDistribution({1: 0.4, 2: 0.6})
+    >>> joint = create_independent_joint(dist1, dist2, "VER", "HAM")
+    >>> joint[(1, 1)]  # P(VER=1, HAM=1) = P(VER=1) * P(HAM=1)
+    0.28
+    """
+    return JointDistribution.create_from_distributions(
+        dist1, dist2, entity1_name=name1, entity2_name=name2, constrained=False
+    )
+
+
+def create_constrained_joint(
+    dist1: PositionDistribution,
+    dist2: PositionDistribution,
+    name1: str = "var1",
+    name2: str = "var2",
+) -> JointDistribution:
+    """
+    Create a constrained joint distribution between two distributions.
+
+    This function creates a joint distribution with the constraint that
+    the two entities cannot have the same value. This is typical in racing
+    where two drivers cannot finish in the same position.
+
+    Parameters
+    ----------
+    dist1 : PositionDistribution
+        First distribution
+    dist2 : PositionDistribution
+        Second distribution
+    name1 : str, optional
+        Name of first entity, by default "var1"
+    name2 : str, optional
+        Name of second entity, by default "var2"
+
+    Returns
+    -------
+    JointDistribution
+        Constrained joint distribution
+
+    Examples
+    --------
+    >>> dist1 = PositionDistribution({1: 0.7, 2: 0.3})
+    >>> dist2 = PositionDistribution({1: 0.4, 2: 0.6})
+    >>> joint = create_constrained_joint(dist1, dist2, "VER", "HAM")
+    >>> joint[(1, 1)]  # Can't both have position 1
+    0.0
+    """
+    return JointDistribution.create_from_distributions(
+        dist1, dist2, entity1_name=name1, entity2_name=name2, constrained=True
+    )

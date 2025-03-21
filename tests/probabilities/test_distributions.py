@@ -140,6 +140,29 @@ class TestPositionDistribution:
         probs = list(dist.probabilities)
         assert probs == [0.3, 0.2, 0.5]
 
+    def test_expected_value_method(self):
+        """Test the expected_value method."""
+        # Create a position distribution
+        dist = PositionDistribution({1: 0.6, 2: 0.4})
+
+        # Test with a complete value dictionary
+        points = {1: 25, 2: 18}
+        expected_points = 0.6 * 25 + 0.4 * 18
+        assert dist.expected_value(points) == expected_points
+
+        # Test with missing values (should default to 0.0)
+        incomplete_points = {1: 25}
+        expected_points_incomplete = 0.6 * 25 + 0.4 * 0.0
+        assert dist.expected_value(incomplete_points) == expected_points_incomplete
+
+        # Test with extra values (should ignore them)
+        extra_points = {1: 25, 2: 18, 3: 15, 4: 12}
+        expected_points_extra = 0.6 * 25 + 0.4 * 18
+        assert dist.expected_value(extra_points) == expected_points_extra
+
+        # Test with empty value dictionary (should return 0.0)
+        assert dist.expected_value({}) == 0.0
+
 
 class TestJointDistribution:
     """Test cases for JointDistribution class."""
@@ -583,3 +606,59 @@ class TestRaceDistribution:
         # Get driver IDs
         driver_ids = race_dist.get_driver_ids()
         assert driver_ids == {"VER", "HAM"}
+
+
+def test_create_independent_joint():
+    """Test the create_independent_joint function."""
+    from gridrival_ai.probabilities.distributions import create_independent_joint
+
+    # Create position distributions
+    dist1 = PositionDistribution({1: 0.7, 2: 0.3})
+    dist2 = PositionDistribution({1: 0.4, 2: 0.6})
+
+    # Create independent joint distribution
+    joint = create_independent_joint(dist1, dist2, "VER", "HAM")
+
+    # Check joint probabilities
+    assert math.isclose(joint[(1, 1)], 0.7 * 0.4)
+    assert math.isclose(joint[(1, 2)], 0.7 * 0.6)
+    assert math.isclose(joint[(2, 1)], 0.3 * 0.4)
+    assert math.isclose(joint[(2, 2)], 0.3 * 0.6)
+
+    # Check entity names
+    assert joint.entity1_name == "VER"
+    assert joint.entity2_name == "HAM"
+
+    # Make sure joint is valid
+    assert joint.is_valid
+
+
+def test_create_constrained_joint():
+    """Test the create_constrained_joint function."""
+    from gridrival_ai.probabilities.distributions import create_constrained_joint
+
+    # Create position distributions
+    dist1 = PositionDistribution({1: 0.7, 2: 0.3})
+    dist2 = PositionDistribution({1: 0.4, 2: 0.6})
+
+    # Create constrained joint distribution
+    joint = create_constrained_joint(dist1, dist2, "VER", "HAM")
+
+    # Check joint probabilities - same positions should have 0 probability
+    assert joint[(1, 1)] == 0.0
+    assert joint[(2, 2)] == 0.0
+
+    # Other positions should be normalized
+    total_prob = 0.7 * 0.6 + 0.3 * 0.4  # for valid combinations
+    assert math.isclose(joint[(1, 2)], 0.7 * 0.6 / total_prob)
+    assert math.isclose(joint[(2, 1)], 0.3 * 0.4 / total_prob)
+
+    # Check entity names
+    assert joint.entity1_name == "VER"
+    assert joint.entity2_name == "HAM"
+
+    # Make sure probabilities sum to 1.0
+    assert math.isclose(sum(joint.probabilities), 1.0)
+
+    # Make sure joint is valid
+    assert joint.is_valid

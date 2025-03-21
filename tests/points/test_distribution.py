@@ -211,6 +211,7 @@ class TestDistributionAdapter:
         """Test getting qual/race joint distribution - Fallback strategy."""
         # Set up registry mock to fail both strategies
         adapter.registry.get_joint.side_effect = KeyError("No joint distribution found")
+        adapter.registry.get.return_value = position_distribution
 
         # Mock has to return True for qualifying and race, but False for correlation
         def mock_has(entity_id, context):
@@ -220,18 +221,29 @@ class TestDistributionAdapter:
 
         adapter.registry.has.side_effect = mock_has
 
-        # Create a mock joint distribution for the fallback
-        mock_joint = JointDistribution({(1, 1): 1.0}, "qualifying", "race")
+        # Get joint distribution - should use fallback
+        joint_dist = adapter.get_qualifying_race_distribution("VER")
 
-        # Import the module where create_independent_joint is imported
-        import gridrival_ai.points.distributions as dist_module
+        # Verify it's a JointDistribution
+        assert isinstance(joint_dist, JointDistribution)
 
-        # Patch the function at the module level
-        with patch.object(
-            dist_module, "create_independent_joint", return_value=mock_joint
-        ):
-            dist = adapter.get_qualifying_race_distribution("VER")
-            assert dist is mock_joint
+        # Verify entity names are set correctly
+        assert joint_dist.entity1_name == "qualifying"
+        assert joint_dist.entity2_name == "race"
+
+        # Since both position_distributions are the same {1: 0.6, 2: 0.4},
+        # the joint probabilities should be:
+        # (1,1): 0.6 * 0.6 = 0.36
+        # (1,2): 0.6 * 0.4 = 0.24
+        # (2,1): 0.4 * 0.6 = 0.24
+        # (2,2): 0.4 * 0.4 = 0.16
+        assert joint_dist[(1, 1)] == pytest.approx(0.36)
+        assert joint_dist[(1, 2)] == pytest.approx(0.24)
+        assert joint_dist[(2, 1)] == pytest.approx(0.24)
+        assert joint_dist[(2, 2)] == pytest.approx(0.16)
+
+        # Verify the sum of probabilities is 1.0
+        assert sum(joint_dist.probabilities) == pytest.approx(1.0)
 
     def test_get_qualifying_race_distribution_missing_distributions(self, adapter):
         """Test error when distributions missing for qual/race joint."""

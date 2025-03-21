@@ -256,6 +256,33 @@ class PositionDistribution:
         """
         return dict(self.position_probs)
 
+    def expected_value(self, value_dict: Dict[int, float]) -> float:
+        """
+        Calculate expected value based on provided values for each position.
+
+        Parameters
+        ----------
+        value_dict : Dict[int, float]
+            Dictionary mapping positions to values (e.g., points)
+
+        Returns
+        -------
+        float
+            Expected value
+
+        Examples
+        --------
+        >>> dist = PositionDistribution({1: 0.6, 2: 0.4})
+        >>> points = {1: 25, 2: 18}
+        >>> dist.expected_value(points)
+        22.2  # 0.6*25 + 0.4*18
+        """
+        expected = 0.0
+        for position, probability in self.items():
+            value = value_dict.get(position, 0.0)
+            expected += probability * value
+        return expected
+
     def __getitem__(self, position: int) -> float:
         """
         Get probability for a position using dictionary-like access.

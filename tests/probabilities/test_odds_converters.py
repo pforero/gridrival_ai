@@ -11,6 +11,7 @@ from typing import List
 import numpy as np
 import pytest
 
+from gridrival_ai.probabilities.distributions import PositionDistribution
 from gridrival_ai.probabilities.odds_converters import (
     BasicConverter,
     OddsConverter,
@@ -49,6 +50,36 @@ class TestBaseOddsConverter:
         result = converter.convert([2.0, 4.0], 1.0)
         assert isinstance(result, np.ndarray)
         assert math.isclose(result.sum(), 1.0)
+
+    def test_to_position_distribution(self):
+        """Test the to_position_distribution method."""
+
+        class TestConverter(OddsConverter):
+            def convert(self, odds: List[float], target_sum: float = 1.0) -> np.ndarray:
+                # Simple implementation that returns equal probabilities
+                return np.ones(len(odds)) * (target_sum / len(odds))
+
+        converter = TestConverter()
+        odds = [2.0, 4.0, 6.0]
+
+        # Convert to position distribution
+        dist = converter.to_position_distribution(odds)
+
+        # Check that it's a PositionDistribution
+        assert isinstance(dist, PositionDistribution)
+
+        # Check that positions are 1-indexed and have correct values
+        assert dist[1] == pytest.approx(1 / 3)
+        assert dist[2] == pytest.approx(1 / 3)
+        assert dist[3] == pytest.approx(1 / 3)
+
+        # Check that probabilities sum to 1.0
+        assert sum(dist.probabilities) == pytest.approx(1.0)
+
+        # Test with custom target_sum
+        dist = converter.to_position_distribution(odds, target_sum=2.0)
+        assert sum(dist.probabilities) == pytest.approx(2.0)
+        assert dist[1] == pytest.approx(2 / 3)
 
 
 class TestBasicConverter:

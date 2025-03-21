@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, cast
 
 from gridrival_ai.data.reference import CONSTRUCTORS
-from gridrival_ai.probabilities.distributions import (  # create_independent_joint,
+from gridrival_ai.probabilities.distributions import (
     JointDistribution,
     PositionDistribution,
 )
@@ -209,15 +209,12 @@ class DistributionAdapter:
         ------
         KeyError
             If no distributions found for driver
-        ValueError
-            If distribution correlation not supported
 
         Notes
         -----
-        This method attempts multiple strategies to find the joint distribution:
-        1. Look for an explicit correlation distribution in the registry
-        2. Try to get a correlation from driver session correlation
-        3. Create an independent joint distribution as fallback
+        This method creates an independent joint distribution between qualifying
+        and race positions. This assumes independence between the two sessions,
+        which is a simplification of reality.
 
         Examples
         --------
@@ -240,32 +237,15 @@ class DistributionAdapter:
         qual_dist = self.get_position_distribution(driver_id, session1)
         race_dist = self.get_position_distribution(driver_id, session2)
 
-        # Strategy 1: Try to get a stored joint distribution if available
-        try:
-            return self.registry.get_joint(
-                f"{driver_id}_{session1}",
-                f"{driver_id}_{session2}",
-                "correlation",
-                constrained=False,
-            )
-        except (KeyError, ValueError):
-            pass
+        # Create a joint distribution assuming independence between sessions
+        joint_probs = {}
+        for qual_pos, qual_prob in qual_dist.items():
+            for race_pos, race_prob in race_dist.items():
+                joint_probs[(qual_pos, race_pos)] = qual_prob * race_prob
 
-        # Strategy 2: Try to use registry's session correlation mechanism
-        try:
-            correlation_id = f"{driver_id}_correlation"
-            if self.registry.has(correlation_id, "qual_race"):
-                return cast(
-                    JointDistribution, self.registry.get(correlation_id, "qual_race")
-                )
-        except (KeyError, ValueError):
-            pass
-
-        # Strategy 3: If all else fails, create an independent joint distribution
-        # This is a fallback and may not capture the true correlation
-        # return create_independent_joint(
-        #    qual_dist, race_dist, name1=session1, name2=session2
-        # )
+        return JointDistribution(
+            joint_probs, entity1_name=session1, entity2_name=session2
+        )
 
     def get_completion_probability(
         self, driver_id: str, default: float = 0.95

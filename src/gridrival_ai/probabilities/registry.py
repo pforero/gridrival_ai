@@ -33,15 +33,17 @@ Examples
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from gridrival_ai.probabilities.distributions import (
-    Distribution,
     JointDistribution,
     PositionDistribution,
     create_constrained_joint,
     create_independent_joint,
 )
+
+# Define a type alias for possible distribution types
+DistributionType = Union[PositionDistribution, JointDistribution]
 
 
 @dataclass
@@ -54,7 +56,7 @@ class DistributionRegistry:
 
     Attributes
     ----------
-    distributions : Dict[str, Dict[str, Distribution]]
+    distributions : Dict[str, Dict[str, DistributionType]]
         Nested dictionary storing distributions by entity ID and context.
 
     Examples
@@ -67,10 +69,10 @@ class DistributionRegistry:
     0.6
     """
 
-    distributions: Dict[str, Dict[str, Distribution]] = field(default_factory=dict)
+    distributions: Dict[str, Dict[str, DistributionType]] = field(default_factory=dict)
 
     def register(
-        self, entity_id: str, context: str, distribution: Distribution
+        self, entity_id: str, context: str, distribution: DistributionType
     ) -> None:
         """
         Register a distribution for an entity and context.
@@ -81,7 +83,7 @@ class DistributionRegistry:
             ID of the entity (e.g., driver or constructor code).
         context : str
             Context for the distribution (e.g., 'qualifying', 'race').
-        distribution : Distribution
+        distribution : DistributionType
             Probability distribution to register.
 
         Examples
@@ -99,8 +101,8 @@ class DistributionRegistry:
         self.distributions[entity_id][context] = distribution
 
     def get(
-        self, entity_id: str, context: str, default: Optional[Distribution] = None
-    ) -> Distribution:
+        self, entity_id: str, context: str, default: Optional[DistributionType] = None
+    ) -> DistributionType:
         """
         Get distribution for an entity and context.
 
@@ -110,12 +112,12 @@ class DistributionRegistry:
             ID of the entity (e.g., driver or constructor code).
         context : str
             Context for the distribution (e.g., 'qualifying', 'race').
-        default : Optional[Distribution], optional
+        default : Optional[DistributionType], optional
             Default distribution to return if not found, by default None.
 
         Returns
         -------
-        Distribution
+        DistributionType
             Probability distribution for the entity and context.
 
         Raises

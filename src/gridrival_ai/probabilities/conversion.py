@@ -17,7 +17,7 @@ ShinsConverter : OddsConverter
     Shin's method for insider trading (Shin, 1992).
 PowerConverter : OddsConverter
     Power method using variable exponent.
-HarvilleConverter : OddsConverter
+HarvilleGridCreator : OddsConverter
     Harville method with dynamic programming for grid probabilities.
 ConverterFactory
     Factory for obtaining odds converters.
@@ -44,7 +44,7 @@ from typing import Dict, List, Optional, Type, Union
 
 from gridrival_ai.probabilities.distributions.position import PositionDistribution
 from gridrival_ai.probabilities.grid_creators import (
-    CumulativeMarketConverter,
+    CumulativeGridCreator,
     HarvilleGridCreator,
 )
 from gridrival_ai.probabilities.odds_converters import (
@@ -93,7 +93,7 @@ class ConverterFactory:
         "shin": ShinsConverter,
         "power": PowerConverter,
         "harville": HarvilleGridCreator,
-        "cumulative": CumulativeMarketConverter,
+        "cumulative": CumulativeGridCreator,
     }
 
     @classmethod
