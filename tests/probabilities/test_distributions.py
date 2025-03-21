@@ -1,7 +1,6 @@
 """Tests for the PositionDistribution class."""
 
 import math
-from unittest.mock import patch
 
 import pytest
 
@@ -412,7 +411,7 @@ class TestSessionDistribution:
         assert marg2[1] == 0.4
         assert marg2[2] == 0.6
 
-        # Check correct constraints: in race, one driver can't have the same position as another
+        # Check correct constraints: one driver can't have the same position as another
         assert joint[(1, 1)] == 0.0
         assert joint[(2, 2)] == 0.0
 
