@@ -12,7 +12,6 @@ from typing import Dict, List
 
 from gridrival_ai.probabilities.distributions.joint import JointDistribution
 from gridrival_ai.probabilities.distributions.position import PositionDistribution
-from gridrival_ai.probabilities.normalizers.factory import get_grid_normalizer
 
 # Constants
 TOLERANCE = 1e-6
@@ -261,6 +260,8 @@ class SessionDistribution:
         SessionDistribution
             Normalized session distribution
         """
+        from gridrival_ai.probabilities.normalizers.factory import get_grid_normalizer
+
         # Get normalizer
         normalizer = get_grid_normalizer(method, **kwargs)
 
