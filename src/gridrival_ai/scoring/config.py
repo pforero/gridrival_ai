@@ -218,8 +218,7 @@ class ScoringConfig:
         """Validate additional point values."""
         if not MIN_POINTS <= self.completion_stage_points <= MAX_POINTS:
             raise ConfigurationError(
-                f"completion_stage_points must be between {MIN_POINTS}"
-                f" and {MAX_POINTS}"
+                f"completion_stage_points must be between {MIN_POINTS} and {MAX_POINTS}"
             )
 
     def _validate_thresholds(self) -> None:

@@ -58,8 +58,7 @@ def get_odds_converter(method: str = "basic", **kwargs) -> OddsConverter:
     if method not in _CONVERTERS:
         valid_methods = ", ".join(_CONVERTERS.keys())
         raise ValueError(
-            f"Unknown conversion method: {method}. "
-            f"Valid methods are: {valid_methods}"
+            f"Unknown conversion method: {method}. Valid methods are: {valid_methods}"
         )
 
     converter_class = _CONVERTERS[method]

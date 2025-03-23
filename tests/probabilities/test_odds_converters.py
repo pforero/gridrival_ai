@@ -405,9 +405,9 @@ class TestConverterBehavioral:
         for name, converter in converters.items():
             for target in targets:
                 result = converter.convert(odds, target_sum=target)
-                assert math.isclose(
-                    result.sum(), target
-                ), f"{name} didn't sum to {target}"
+                assert math.isclose(result.sum(), target), (
+                    f"{name} didn't sum to {target}"
+                )
 
     def test_compared_behavior(self, converters):
         """Compare the behavior of different converters."""
@@ -419,9 +419,9 @@ class TestConverterBehavioral:
 
         # All methods should preserve ordering (highest prob for lowest odds)
         for name, probs in results.items():
-            assert np.all(
-                np.diff(probs) <= 0
-            ), f"{name} doesn't maintain probability ordering"
+            assert np.all(np.diff(probs) <= 0), (
+                f"{name} doesn't maintain probability ordering"
+            )
 
         # Check expected behavior of Shin's converter
         # Shin's method uses a fixed z value of 0.02 and is designed to balance
@@ -433,17 +433,17 @@ class TestConverterBehavioral:
         # Relative to raw probabilities, Shin should reduce high probabilities
         # and increase low probabilities (the balancing effect)
         assert shin_probs[0] < raw_probs[0], "Shin should reduce favorite probability"
-        assert (
-            shin_probs[-1] > raw_probs[-1]
-        ), "Shin should increase longshot probability"
+        assert shin_probs[-1] > raw_probs[-1], (
+            "Shin should increase longshot probability"
+        )
 
         # Check that all converters produce valid probabilities
         for name, probs in results.items():
             assert np.all(probs >= 0), f"{name} produced negative probabilities"
             assert np.all(probs <= 1), f"{name} produced probabilities > 1"
-            assert math.isclose(
-                probs.sum(), 1.0
-            ), f"{name} probabilities don't sum to 1.0"
+            assert math.isclose(probs.sum(), 1.0), (
+                f"{name} probabilities don't sum to 1.0"
+            )
 
 
 if __name__ == "__main__":

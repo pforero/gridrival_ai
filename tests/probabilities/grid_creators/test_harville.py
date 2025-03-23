@@ -177,9 +177,9 @@ class TestHarvilleGridCreator:
             for pos in range(1, 4):
                 win_only_prob = win_only_drivers[driver].get(pos)
                 multiple_markets_prob = multiple_markets_drivers[driver].get(pos)
-                assert np.isclose(
-                    win_only_prob, multiple_markets_prob
-                ), f"Probabilities differ for driver {driver} at position {pos}"
+                assert np.isclose(win_only_prob, multiple_markets_prob), (
+                    f"Probabilities differ for driver {driver} at position {pos}"
+                )
 
     def test_harville_properties(self, creator):
         """Test the mathematical properties of the Harville method."""

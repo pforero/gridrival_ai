@@ -97,13 +97,15 @@ class DriverPointsCalculator:
             driver_id, "qualifying"
         )
         result["qualifying"] = self.position_calculator.calculate(
-            qual_dist, self.scorer.tables.driver_points[0]  # Qualifying points table
+            qual_dist,
+            self.scorer.tables.driver_points[0],  # Qualifying points table
         )
 
         # Get race distribution and calculate points
         race_dist = self.distributions.get_position_distribution(driver_id, "race")
         result["race"] = self.position_calculator.calculate(
-            race_dist, self.scorer.tables.driver_points[1]  # Race points table
+            race_dist,
+            self.scorer.tables.driver_points[1],  # Race points table
         )
 
         # Calculate sprint points if applicable

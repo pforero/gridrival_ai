@@ -511,11 +511,13 @@ class TestRaceDistribution:
 
         # Create sessions with incorrect types
         wrong_race = SessionDistribution(
-            {"VER": ver_dist, "HAM": ham_dist}, "qualifying"  # Should be "race"
+            {"VER": ver_dist, "HAM": ham_dist},
+            "qualifying",  # Should be "race"
         )
 
         wrong_quali = SessionDistribution(
-            {"VER": ver_dist, "HAM": ham_dist}, "race"  # Should be "qualifying"
+            {"VER": ver_dist, "HAM": ham_dist},
+            "race",  # Should be "qualifying"
         )
 
         # Test wrong race type
@@ -541,7 +543,8 @@ class TestRaceDistribution:
         race_session = SessionDistribution({"VER": ver_dist, "HAM": ham_dist}, "race")
 
         quali_session = SessionDistribution(
-            {"VER": ver_dist, "LEC": lec_dist}, "qualifying"  # Different driver set
+            {"VER": ver_dist, "LEC": lec_dist},
+            "qualifying",  # Different driver set
         )
 
         # Test different drivers

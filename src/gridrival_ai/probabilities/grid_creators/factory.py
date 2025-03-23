@@ -55,8 +55,7 @@ def get_grid_creator(method: str = "harville", **kwargs) -> GridCreator:
     if method not in _CREATORS:
         valid_methods = ", ".join(_CREATORS.keys())
         raise ValueError(
-            f"Unknown grid creator method: {method}. "
-            f"Valid methods are: {valid_methods}"
+            f"Unknown grid creator method: {method}. Valid methods are: {valid_methods}"
         )
 
     creator_class = _CREATORS[method]
