@@ -11,7 +11,7 @@ from gridrival_ai.data.models import Constructor, Driver, Race
 # Each tuple contains (driver_id, full name)
 DRIVER_LIST: list[tuple[str, str]] = [
     ("VER", "Max Verstappen"),
-    ("LAW", "Liam Lawson"),
+    ("TSU", "Yuki Tsunoda"),
     ("RUS", "George Russell"),
     ("ANT", "Andrea Kimi Antonelli"),
     ("LEC", "Charles Leclerc"),
@@ -24,7 +24,7 @@ DRIVER_LIST: list[tuple[str, str]] = [
     ("DOO", "Jack Doohan"),
     ("ALB", "Alexander Albon"),
     ("SAI", "Carlos Sainz Jr."),
-    ("TSU", "Yuki Tsunoda"),
+    ("LAW", "Liam Lawson"),
     ("HAD", "Isack Hadjar"),
     ("HUL", "Nico Hülkenberg"),
     ("BOR", "Gabriel Bortoleto"),
@@ -35,7 +35,7 @@ DRIVER_LIST: list[tuple[str, str]] = [
 # Type alias for driver IDs
 DriverId = Literal[
     "VER",
-    "LAW",
+    "TSU",
     "RUS",
     "ANT",
     "LEC",
@@ -48,7 +48,7 @@ DriverId = Literal[
     "DOO",
     "ALB",
     "SAI",
-    "TSU",
+    "LAW",
     "HAD",
     "HUL",
     "BOR",
@@ -59,14 +59,14 @@ DriverId = Literal[
 # List of all constructors
 # Each tuple contains (constructor_id, full name, (driver1_id, driver2_id))
 CONSTRUCTOR_LIST: list[tuple[str, str, tuple[str, str]]] = [
-    ("RBR", "Red Bull Racing", ("VER", "LAW")),
+    ("RBR", "Red Bull Racing", ("VER", "TSU")),
     ("MER", "Mercedes", ("RUS", "ANT")),
     ("FER", "Ferrari", ("LEC", "HAM")),
     ("MCL", "McLaren", ("NOR", "PIA")),
     ("AST", "Aston Martin", ("ALO", "STR")),
     ("ALP", "Alpine", ("GAS", "DOO")),
     ("WIL", "Williams", ("ALB", "SAI")),
-    ("RBU", "Racing Bulls", ("TSU", "HAD")),
+    ("RBU", "Racing Bulls", ("LAW", "HAD")),
     ("SAU", "Kick Sauber", ("HUL", "BOR")),
     ("HAA", "Haas", ("OCO", "BEA")),
 ]

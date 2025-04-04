@@ -111,7 +111,7 @@ def test_calculate_driver_points(calculator):
     calculator.driver_calculator.calculate.assert_called_once_with(
         driver_id="VER",
         rolling_avg=1.5,  # From mock_driver_stats
-        teammate_id="LAW",  # Should find teammate from CONSTRUCTORS
+        teammate_id="TSU",  # Should find teammate from CONSTRUCTORS
         race_format=RaceFormat.STANDARD,
     )
 
@@ -140,7 +140,7 @@ def test_calculate_driver_points_with_sprint(calculator):
     calculator.driver_calculator.calculate.assert_called_once_with(
         driver_id="VER",
         rolling_avg=1.5,  # From mock_driver_stats
-        teammate_id="LAW",  # Should find teammate from CONSTRUCTORS
+        teammate_id="TSU",  # Should find teammate from CONSTRUCTORS
         race_format=RaceFormat.SPRINT,
     )
 
