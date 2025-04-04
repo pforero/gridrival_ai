@@ -6,12 +6,11 @@ A Python library for optimizing F1 fantasy teams in the GridRival "Contracts" fo
 
 Main Components
 -------------
-- Team optimization
-- Contract management
+- Odds to Probabilities
 - Scoring system
-- Salary management
+- Team optimization
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "Pablo Forero"
 __email__ = "github46@pabloforero.eu"
