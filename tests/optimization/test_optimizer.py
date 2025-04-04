@@ -7,6 +7,10 @@ import pytest
 from gridrival_ai.data.fantasy import FantasyLeagueData
 from gridrival_ai.optimization.optimizer import TeamOptimizer
 from gridrival_ai.optimization.types import ConstructorScoring, DriverScoring
+from gridrival_ai.probabilities.distributions import (
+    RaceDistribution,
+    SessionDistribution,
+)
 from gridrival_ai.scoring.types import RaceFormat
 
 
@@ -68,18 +72,41 @@ def mock_points_calculator():
 
 
 @pytest.fixture
-def mock_probability_registry():
-    """Create mock probability registry."""
-    registry = Mock()
+def mock_race_distribution():
+    """Create mock race distribution."""
+    race_dist = Mock(spec=RaceDistribution)
 
-    # Define behavior for has method
-    def has(entity_id, context):
-        # For simplicity, return True for all entities and contexts in our tests
-        return True
+    # Mock session distributions
+    race_session = Mock(spec=SessionDistribution)
+    qualifying_session = Mock(spec=SessionDistribution)
+    sprint_session = Mock(spec=SessionDistribution)
 
-    registry.has = Mock(side_effect=has)
+    race_dist.race = race_session
+    race_dist.qualifying = qualifying_session
+    race_dist.sprint = sprint_session
 
-    return registry
+    # Define behavior for get_driver_distribution method
+    def get_driver_distribution(driver_id, session_type):
+        # For simplicity, just return a mock position distribution
+        # In real tests, you might want to configure more complex behavior
+        return Mock()
+
+    race_dist.get_driver_distribution = Mock(side_effect=get_driver_distribution)
+
+    # Define behavior for get_session method
+    def get_session(session_type):
+        if session_type == "race":
+            return race_session
+        elif session_type == "qualifying":
+            return qualifying_session
+        elif session_type == "sprint":
+            return sprint_session
+        else:
+            raise ValueError(f"Invalid session type: {session_type}")
+
+    race_dist.get_session = Mock(side_effect=get_session)
+
+    return race_dist
 
 
 @pytest.fixture
@@ -141,13 +168,13 @@ def driver_stats():
 
 @pytest.fixture
 def optimizer(
-    mock_points_calculator, mock_probability_registry, sample_league_data, driver_stats
+    mock_points_calculator, mock_race_distribution, sample_league_data, driver_stats
 ):
     """Create TeamOptimizer with mocked dependencies."""
     return TeamOptimizer(
         league_data=sample_league_data,
         points_calculator=mock_points_calculator,
-        probability_registry=mock_probability_registry,
+        race_distribution=mock_race_distribution,
         driver_stats=driver_stats,
     )
 
@@ -158,7 +185,7 @@ class TestTeamOptimizer:
     def test_initialization(
         self,
         mock_points_calculator,
-        mock_probability_registry,
+        mock_race_distribution,
         sample_league_data,
         driver_stats,
     ):
@@ -166,14 +193,14 @@ class TestTeamOptimizer:
         optimizer = TeamOptimizer(
             league_data=sample_league_data,
             points_calculator=mock_points_calculator,
-            probability_registry=mock_probability_registry,
+            race_distribution=mock_race_distribution,
             driver_stats=driver_stats,
             budget=95.0,
         )
 
         assert optimizer.league_data == sample_league_data
         assert optimizer.points_calculator == mock_points_calculator
-        assert optimizer.probability_registry == mock_probability_registry
+        assert optimizer.race_distribution == mock_race_distribution
         assert optimizer.driver_stats == driver_stats
         assert optimizer.budget == 95.0
 
@@ -279,7 +306,7 @@ class TestTeamOptimizer:
         tight_optimizer = TeamOptimizer(
             league_data=optimizer.league_data,
             points_calculator=optimizer.points_calculator,
-            probability_registry=optimizer.probability_registry,
+            race_distribution=optimizer.race_distribution,
             driver_stats=optimizer.driver_stats,
             budget=85.0,  # Reduced budget
         )
@@ -297,7 +324,7 @@ class TestTeamOptimizer:
         impossible_optimizer = TeamOptimizer(
             league_data=optimizer.league_data,
             points_calculator=optimizer.points_calculator,
-            probability_registry=optimizer.probability_registry,
+            race_distribution=optimizer.race_distribution,
             driver_stats=optimizer.driver_stats,
             budget=50.0,  # Too low to create a valid team
         )
@@ -349,7 +376,7 @@ class TestTeamOptimizer:
         no_talent_optimizer = TeamOptimizer(
             league_data=league_data,
             points_calculator=optimizer.points_calculator,
-            probability_registry=optimizer.probability_registry,
+            race_distribution=optimizer.race_distribution,
             driver_stats=optimizer.driver_stats,
         )
 

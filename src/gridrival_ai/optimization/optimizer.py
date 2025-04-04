@@ -19,7 +19,7 @@ from gridrival_ai.optimization.types import (
     TeamSolution,
 )
 from gridrival_ai.points.calculator import PointsCalculator
-from gridrival_ai.probabilities.registry import DistributionRegistry
+from gridrival_ai.probabilities.distributions import RaceDistribution
 from gridrival_ai.scoring.types import RaceFormat
 
 # Constants
@@ -41,8 +41,8 @@ class TeamOptimizer:
         Current league state including salaries and constraints
     points_calculator : PointsCalculator
         Calculator for expected points using the new points API
-    probability_registry : DistributionRegistry
-        Registry containing probability distributions
+    race_distribution : RaceDistribution
+        Distribution containing probabilities for all sessions and drivers
     driver_stats : Dict[str, float]
         Dictionary mapping driver IDs to rolling averages
     budget : float, optional
@@ -61,7 +61,7 @@ class TeamOptimizer:
     --------
     >>> from gridrival_ai.data.fantasy import FantasyLeagueData
     >>> from gridrival_ai.points.calculator import PointsCalculator
-    >>> from gridrival_ai.probabilities.registry import DistributionRegistry
+    >>> from gridrival_ai.probabilities.distributions import RaceDistribution
     >>>
     >>> # Create prerequisites
     >>> league_data = FantasyLeagueData.from_dicts(
@@ -70,17 +70,18 @@ class TeamOptimizer:
     ...     rolling_averages={"VER": 1.5, "HAM": 3.0}
     ... )
     >>>
-    >>> # Create registry and points calculator
-    >>> registry = DistributionRegistry()
-    >>> # Populate registry with distributions...
+    >>> # Create race distribution
+    >>> odds_data = {...}  # Dictionary of betting odds
+    >>> race_dist = RaceDistribution.from_structured_odds(odds_data)
     >>>
-    >>> points_calculator = PointsCalculator(scorer, registry, driver_stats)
+    >>> # Create points calculator
+    >>> points_calculator = PointsCalculator(scorer, race_dist, driver_stats)
     >>>
     >>> # Create optimizer
     >>> optimizer = TeamOptimizer(
     ...     league_data=league_data,
     ...     points_calculator=points_calculator,
-    ...     probability_registry=registry,
+    ...     race_distribution=race_dist,
     ...     driver_stats=driver_stats
     ... )
     >>>
@@ -97,14 +98,14 @@ class TeamOptimizer:
         self,
         league_data: FantasyLeagueData,
         points_calculator: PointsCalculator,
-        probability_registry: DistributionRegistry,
+        race_distribution: RaceDistribution,
         driver_stats: Dict[str, float],
         budget: float = 100.0,
     ) -> None:
         """Initialize optimizer with league state."""
         self.league_data = league_data
         self.points_calculator = points_calculator
-        self.probability_registry = probability_registry
+        self.race_distribution = race_distribution
         self.driver_stats = driver_stats
         self.budget = budget
 
@@ -183,7 +184,7 @@ class TeamOptimizer:
                     best_solution=None,
                     alternative_solutions=[],
                     remaining_budget=self.budget,
-                    error_message="Optimization failed: No valid team composition found",
+                    error_message="Optimization failed: No valid team found",
                 )
 
             remaining = self.budget - best_solution.total_cost
@@ -228,8 +229,10 @@ class TeamOptimizer:
 
         # Calculate scores for each available driver
         for driver_id in available_drivers:
-            # Check if driver has distributions in the registry
-            if not self.probability_registry.has(driver_id, "race"):
+            # Check if driver has distributions
+            try:
+                self.race_distribution.get_driver_distribution(driver_id, "race")
+            except KeyError:
                 continue
 
             # Get driver salary and check talent eligibility
