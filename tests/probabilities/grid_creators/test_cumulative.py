@@ -184,9 +184,9 @@ class TestCumulativeGridCreator:
                 # Check if there's variation in the probabilities
                 # Using a very small epsilon to detect any difference
                 max_diff = max(probs) - min(probs)
-                assert max_diff > 0.001, (
-                    f"Probabilities at position {pos} should differ: {probs}"
-                )
+                assert (
+                    max_diff > 0.001
+                ), f"Probabilities at position {pos} should differ: {probs}"
 
     def test_column_constraints(self, creator, sample_odds):
         """Test that column constraints are enforced."""
