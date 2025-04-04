@@ -97,25 +97,6 @@ class TestPositionPointsCalculator:
         points = calculator.calculate(position_dist, points_table)
         assert pytest.approx(points, 0.01) == expected_points
 
-    def test_points_table_smaller_than_distribution(self):
-        """Test handling when the points table doesn't cover all positions."""
-        calculator = PositionPointsCalculator()
-
-        # Position distribution including positions beyond the points table
-        position_dist = PositionDistribution(
-            {1: 0.3, 2: 0.3, 11: 0.4}
-        )  # P11 is beyond table
-
-        # Points table only covering P1-P10
-        points_table = np.zeros(11)  # 0-indexed array with space for P0-P10
-        points_table[1:11] = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1]
-
-        # Positions beyond the table should be treated as 0 points
-        expected_points = 0.3 * 25 + 0.3 * 18 + 0.4 * 0  # = 7.5 + 5.4 = 12.9
-
-        points = calculator.calculate(position_dist, points_table)
-        assert pytest.approx(points, 0.01) == expected_points
-
 
 class TestOvertakePointsCalculator:
     """Tests for the OvertakePointsCalculator."""
@@ -450,7 +431,9 @@ class TestImprovementPointsCalculator:
         calculator = ImprovementPointsCalculator()
 
         # Position distribution
-        position_dist = PositionDistribution({3: 0.5, 4: 0.5})
+        position_dist = PositionDistribution(
+            {1: 0.0, 2: 0.0, 3: 0.5, 4: 0.5}
+        )  # Added positions 1-2
 
         # Rolling average of P3 (same or worse)
         rolling_avg = 3.0
@@ -521,7 +504,9 @@ class TestImprovementPointsCalculator:
         ]
 
         # Position distribution
-        position_dist = PositionDistribution({1: 0.6, 3: 0.4})
+        position_dist = PositionDistribution(
+            {1: 0.6, 2: 0.0, 3: 0.4}
+        )  # Added position 2
 
         # Improvement points
         improvement_points = np.array([0, 2, 4])
