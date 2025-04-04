@@ -7,8 +7,9 @@ handling the scoring for team performance.
 
 from typing import Dict
 
+from gridrival_ai.data.reference import CONSTRUCTORS
 from gridrival_ai.points.components import PositionPointsCalculator
-from gridrival_ai.points.distributions import DistributionAdapter
+from gridrival_ai.probabilities.distributions import RaceDistribution
 from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.types import RaceFormat
 
@@ -22,23 +23,23 @@ class ConstructorPointsCalculator:
 
     Parameters
     ----------
-    distributions : DistributionAdapter
-        Adapter for accessing probability distributions
+    race_distribution : RaceDistribution
+        Race distribution containing probabilities for all sessions
     scorer : ScoringCalculator
         Scoring rules calculator
 
     Examples
     --------
-    >>> adapter = DistributionAdapter(registry)
-    >>> calculator = ConstructorPointsCalculator(adapter, scorer)
+    >>> race_dist = RaceDistribution(race_session)
+    >>> calculator = ConstructorPointsCalculator(race_dist, scorer)
     >>> points = calculator.calculate("RBR", RaceFormat.STANDARD)
     >>> print(f"Total constructor points: {sum(points.values()):.1f}")
     Total constructor points: 177.0
     """
 
-    def __init__(self, distributions: DistributionAdapter, scorer: ScoringCalculator):
-        """Initialize with distributions and scorer."""
-        self.distributions = distributions
+    def __init__(self, race_distribution: RaceDistribution, scorer: ScoringCalculator):
+        """Initialize with race distribution and scorer."""
+        self.race_distribution = race_distribution
         self.scorer = scorer
         self.position_calculator = PositionPointsCalculator()
 
@@ -72,20 +73,13 @@ class ConstructorPointsCalculator:
         """
         result = {"qualifying": 0.0, "race": 0.0}
 
-        # Get constructor drivers
-        try:
-            driver1_id, driver2_id = self.distributions.get_constructor_drivers(
-                constructor_id
-            )
-        except KeyError:
-            # If constructor not found, return zero points
-            return result
+        driver1_id, driver2_id = CONSTRUCTORS.get(constructor_id).drivers
 
         # Calculate qualifying points for both drivers
         qual_points = 0.0
         for driver_id in (driver1_id, driver2_id):
             try:
-                qual_dist = self.distributions.get_position_distribution(
+                qual_dist = self.race_distribution.get_driver_distribution(
                     driver_id, "qualifying"
                 )
                 qual_points += self.position_calculator.calculate(
@@ -94,7 +88,7 @@ class ConstructorPointsCalculator:
                         0
                     ],  # Constructor qualifying points
                 )
-            except KeyError:
+            except (KeyError, ValueError):
                 # If distribution not found, continue with next driver
                 continue
 
@@ -104,14 +98,14 @@ class ConstructorPointsCalculator:
         race_points = 0.0
         for driver_id in (driver1_id, driver2_id):
             try:
-                race_dist = self.distributions.get_position_distribution(
+                race_dist = self.race_distribution.get_driver_distribution(
                     driver_id, "race"
                 )
                 race_points += self.position_calculator.calculate(
                     race_dist,
                     self.scorer.tables.constructor_points[1],  # Constructor race points
                 )
-            except KeyError:
+            except (KeyError, ValueError):
                 # If distribution not found, continue with next driver
                 continue
 

@@ -14,7 +14,9 @@ from gridrival_ai.points.components import (
     PositionPointsCalculator,
     TeammatePointsCalculator,
 )
-from gridrival_ai.points.distributions import DistributionAdapter
+from gridrival_ai.probabilities.distributions import (
+    RaceDistribution,
+)
 from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.types import RaceFormat
 
@@ -28,15 +30,15 @@ class DriverPointsCalculator:
 
     Parameters
     ----------
-    distributions : DistributionAdapter
-        Adapter for accessing probability distributions
+    race_distribution : RaceDistribution
+        Race distribution containing probabilities for all sessions
     scorer : ScoringCalculator
         Scoring rules calculator
 
     Examples
     --------
-    >>> adapter = DistributionAdapter(registry)
-    >>> calculator = DriverPointsCalculator(adapter, scorer)
+    >>> race_dist = RaceDistribution(race_session)
+    >>> calculator = DriverPointsCalculator(race_dist, scorer)
     >>> points = calculator.calculate(
     ...     driver_id="VER",
     ...     rolling_avg=1.5,
@@ -47,9 +49,9 @@ class DriverPointsCalculator:
     Total expected points: 156.5
     """
 
-    def __init__(self, distributions: DistributionAdapter, scorer: ScoringCalculator):
-        """Initialize with distributions and scorer."""
-        self.distributions = distributions
+    def __init__(self, race_distribution: RaceDistribution, scorer: ScoringCalculator):
+        """Initialize with race distribution and scorer."""
+        self.race_distribution = race_distribution
         self.scorer = scorer
 
         # Initialize component calculators
@@ -93,7 +95,7 @@ class DriverPointsCalculator:
         result = {}
 
         # Get qualifying distribution and calculate points
-        qual_dist = self.distributions.get_position_distribution(
+        qual_dist = self.race_distribution.get_driver_distribution(
             driver_id, "qualifying"
         )
         result["qualifying"] = self.position_calculator.calculate(
@@ -102,7 +104,7 @@ class DriverPointsCalculator:
         )
 
         # Get race distribution and calculate points
-        race_dist = self.distributions.get_position_distribution(driver_id, "race")
+        race_dist = self.race_distribution.get_driver_distribution(driver_id, "race")
         result["race"] = self.position_calculator.calculate(
             race_dist,
             self.scorer.tables.driver_points[1],  # Race points table
@@ -110,15 +112,15 @@ class DriverPointsCalculator:
 
         # Calculate sprint points if applicable
         if race_format == RaceFormat.SPRINT:
-            sprint_dist = self.distributions.get_position_distribution_safe(
-                driver_id, "sprint"
-            )
-            if sprint_dist is not None:
+            try:
+                sprint_dist = self.race_distribution.get_driver_distribution(
+                    driver_id, "sprint"
+                )
                 result["sprint"] = self.position_calculator.calculate(
                     sprint_dist,
                     self.scorer.tables.driver_points[2],  # Sprint points table
                 )
-            else:
+            except (KeyError, ValueError):
                 # No sprint distribution, use race as fallback
                 result["sprint"] = self.position_calculator.calculate(
                     race_dist,
@@ -126,25 +128,35 @@ class DriverPointsCalculator:
                 )
 
         # Calculate overtake points
-        joint_qual_race = self.distributions.get_qualifying_race_distribution(driver_id)
+        joint_qual_race = self.race_distribution.get_qualifying_race_distribution(
+            driver_id
+        )
         result["overtake"] = self.overtake_calculator.calculate(
             joint_qual_race, self.scorer.tables.overtake_multiplier
         )
 
         # Calculate teammate points
-        joint_driver_teammate = self.distributions.get_joint_distribution_safe(
-            driver_id, teammate_id, "race"
-        )
-        if joint_driver_teammate is not None:
+        try:
+            session = self.race_distribution.get_session("race")
+            joint_driver_teammate = session.get_joint_distribution(
+                driver_id, teammate_id
+            )
             result["teammate"] = self.teammate_calculator.calculate(
                 joint_driver_teammate, self.scorer.tables.teammate_thresholds
             )
-        else:
+        except (KeyError, ValueError):
             # If joint distribution not available, use 0 points
             result["teammate"] = 0.0
 
         # Calculate completion points
-        completion_prob = self.distributions.get_completion_probability(driver_id)
+        try:
+            completion_prob = self.race_distribution.get_completion_probability(
+                driver_id
+            )
+        except KeyError:
+            # Default to high completion probability if not specified
+            completion_prob = 0.95
+
         result["completion"] = self.completion_calculator.calculate(
             completion_prob,
             self.scorer.tables.completion_thresholds,

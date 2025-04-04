@@ -11,9 +11,8 @@ from typing import Dict
 
 from gridrival_ai.data.reference import CONSTRUCTORS
 from gridrival_ai.points.constructor import ConstructorPointsCalculator
-from gridrival_ai.points.distributions import DistributionAdapter
 from gridrival_ai.points.driver import DriverPointsCalculator
-from gridrival_ai.probabilities.registry import DistributionRegistry
+from gridrival_ai.probabilities.distributions import RaceDistribution
 from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.types import RaceFormat
 
@@ -29,21 +28,24 @@ class PointsCalculator:
     ----------
     scorer : ScoringCalculator
         Scoring rules calculator
-    probability_registry : DistributionRegistry
-        Registry containing probability distributions
+    race_distribution : RaceDistribution
+        Distribution containing probabilities for all sessions and drivers
     driver_stats : Dict[str, float]
         Dictionary of driver rolling averages
 
     Examples
     --------
-    >>> from gridrival_ai.probabilities.registry import DistributionRegistry
+    >>> from gridrival_ai.probabilities.distributions import RaceDistribution
     >>> from gridrival_ai.scoring.calculator import ScoringCalculator
     >>>
-    >>> registry = DistributionRegistry()
+    >>> # Create distributions from betting odds
+    >>> odds = {...}  # Dictionary of betting odds
+    >>> race_dist = RaceDistribution.from_structured_odds(odds)
+    >>>
     >>> scorer = ScoringCalculator(config)
     >>> driver_stats = {"VER": 1.5, "PER": 3.2}
     >>>
-    >>> calculator = PointsCalculator(scorer, registry, driver_stats)
+    >>> calculator = PointsCalculator(scorer, race_dist, driver_stats)
     >>> ver_points = calculator.calculate_driver_points("VER")
     >>> rbr_points = calculator.calculate_constructor_points("RBR")
     """
@@ -51,21 +53,19 @@ class PointsCalculator:
     def __init__(
         self,
         scorer: ScoringCalculator,
-        probability_registry: DistributionRegistry,
+        race_distribution: RaceDistribution,
         driver_stats: Dict[str, float],
     ):
         """Initialize with scoring rules and probability distributions."""
         self.scorer = scorer
-        self.distribution_adapter = DistributionAdapter(probability_registry)
+        self.race_distribution = race_distribution
         self.driver_stats = driver_stats
 
         # Initialize component calculators
-        self.driver_calculator = DriverPointsCalculator(
-            self.distribution_adapter, scorer
-        )
+        self.driver_calculator = DriverPointsCalculator(self.race_distribution, scorer)
 
         self.constructor_calculator = ConstructorPointsCalculator(
-            self.distribution_adapter, scorer
+            self.race_distribution, scorer
         )
 
     def calculate_driver_points(
@@ -142,7 +142,8 @@ class PointsCalculator:
             If constructor or required distributions not found
         """
         return self.constructor_calculator.calculate(
-            constructor_id=constructor_id, race_format=race_format
+            constructor_id=constructor_id,
+            race_format=race_format,
         )
 
     @property
@@ -155,4 +156,4 @@ class PointsCalculator:
         SimpleNamespace
             Object for accessing tables via attributes
         """
-        return SimpleNamespace(**self.engine.tables)
+        return SimpleNamespace(**self.scorer.tables)

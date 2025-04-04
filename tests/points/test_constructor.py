@@ -11,42 +11,61 @@ import numpy as np
 import pytest
 
 from gridrival_ai.points.constructor import ConstructorPointsCalculator
-from gridrival_ai.points.distributions import DistributionAdapter
-from gridrival_ai.probabilities.distributions import PositionDistribution
+from gridrival_ai.probabilities.distributions import (
+    PositionDistribution,
+    RaceDistribution,
+    SessionDistribution,
+)
 from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.types import RaceFormat
 
 
 @pytest.fixture
-def mock_adapter():
-    """Create a mock distribution adapter."""
-    adapter = MagicMock(spec=DistributionAdapter)
+def mock_race_distribution():
+    """Create a mock race distribution with position distributions."""
+    race_dist = MagicMock(spec=RaceDistribution)
 
-    # Set up the get_constructor_drivers method to return fixed drivers
-    adapter.get_constructor_drivers.return_value = ("VER", "LAW")
+    # Create session distributions
+    race_session = MagicMock(spec=SessionDistribution)
+    qualifying_session = MagicMock(spec=SessionDistribution)
 
-    # Mock position distributions
-    ver_qual = PositionDistribution({1: 0.7, 2: 0.2, 3: 0.1,4:0,5:0})
-    law_qual = PositionDistribution({1:0,2:0,3: 0.3, 4: 0.4, 5: 0.3})
-    ver_race = PositionDistribution({1: 0.6, 2: 0.3, 3: 0.1,4:0,5:0})
-    law_race = PositionDistribution({1:0,2:0,3: 0.2, 4: 0.5, 5: 0.3})
+    # Mock driver distributions
+    ver_qual = PositionDistribution({1: 0.7, 2: 0.2, 3: 0.1, 4: 0, 5: 0})
+    law_qual = PositionDistribution({1: 0, 2: 0, 3: 0.3, 4: 0.4, 5: 0.3})
+    ver_race = PositionDistribution({1: 0.6, 2: 0.3, 3: 0.1, 4: 0, 5: 0})
+    law_race = PositionDistribution({1: 0, 2: 0, 3: 0.2, 4: 0.5, 5: 0.3})
 
-    # Configure adapter to return position distributions
-    def get_position_distribution(driver_id, session):
-        if driver_id == "VER" and session == "qualifying":
+    # Configure get_driver_distribution to return appropriate distributions
+    def get_driver_distribution(driver_id, session_type):
+        if driver_id == "VER" and session_type == "qualifying":
             return ver_qual
-        elif driver_id == "VER" and session == "race":
+        elif driver_id == "VER" and session_type == "race":
             return ver_race
-        elif driver_id == "LAW" and session == "qualifying":
+        elif driver_id == "LAW" and session_type == "qualifying":
             return law_qual
-        elif driver_id == "LAW" and session == "race":
+        elif driver_id == "LAW" and session_type == "race":
             return law_race
         else:
-            raise KeyError(f"No distribution for {driver_id} in {session}")
+            raise KeyError(f"No distribution for {driver_id} in {session_type}")
 
-    adapter.get_position_distribution.side_effect = get_position_distribution
+    race_dist.get_driver_distribution.side_effect = get_driver_distribution
 
-    return adapter
+    # Set up sessions
+    race_dist.race = race_session
+    race_dist.qualifying = qualifying_session
+
+    # Set up get_session method
+    def get_session(session_type):
+        if session_type == "race":
+            return race_session
+        elif session_type == "qualifying":
+            return qualifying_session
+        else:
+            raise ValueError(f"Invalid session type: {session_type}")
+
+    race_dist.get_session.side_effect = get_session
+
+    return race_dist
 
 
 @pytest.fixture
@@ -74,21 +93,27 @@ def mock_scorer():
     return scorer
 
 
-def test_constructor_calculator_initialization(mock_adapter, mock_scorer):
+def test_constructor_calculator_initialization(mock_race_distribution, mock_scorer):
     """Test that the constructor points calculator initializes correctly."""
-    calculator = ConstructorPointsCalculator(mock_adapter, mock_scorer)
+    calculator = ConstructorPointsCalculator(mock_race_distribution, mock_scorer)
 
-    assert calculator.distributions == mock_adapter
+    assert calculator.race_distribution == mock_race_distribution
     assert calculator.scorer == mock_scorer
     assert hasattr(calculator, "position_calculator")
 
 
-def test_constructor_points_calculation(mock_adapter, mock_scorer):
+def test_constructor_points_calculation(mock_race_distribution, mock_scorer):
     """Test the calculation of constructor points."""
-    calculator = ConstructorPointsCalculator(mock_adapter, mock_scorer)
+    calculator = ConstructorPointsCalculator(mock_race_distribution, mock_scorer)
 
-    # Calculate points for Red Bull
-    points = calculator.calculate("RBR", RaceFormat.STANDARD)
+    # Patch get_constructor_drivers to return fixed drivers
+    with patch(
+        "gridrival_ai.points.constructor.get_constructor_drivers",
+        return_value=("VER", "LAW"),
+    ):
+
+        # Calculate points for Red Bull
+        points = calculator.calculate("RBR", RaceFormat.STANDARD)
 
     # Verify points structure
     assert isinstance(points, dict)
@@ -96,13 +121,13 @@ def test_constructor_points_calculation(mock_adapter, mock_scorer):
     assert "race" in points
 
     # Expected qualifying points: VER (P1: 18 * 0.7, P2: 15 * 0.2, P3: 12 * 0.1) +
-    #                           PER (P3: 12 * 0.3, P4: 10 * 0.4, P5: 8 * 0.3)
+    #                           LAW (P3: 12 * 0.3, P4: 10 * 0.4, P5: 8 * 0.3)
     # = 0.7*18 + 0.2*15 + 0.1*12 + 0.3*12 + 0.4*10 + 0.3*8 = 12.6 + 3.0 + 1.2 + 3.6
     # + 4.0 + 2.4 = 26.8
     expected_qual_points = 26.8
 
     # Expected race points: VER (P1: 25 * 0.6, P2: 18 * 0.3, P3: 15 * 0.1) +
-    #                      PER (P3: 15 * 0.2, P4: 12 * 0.5, P5: 10 * 0.3)
+    #                      LAW (P3: 15 * 0.2, P4: 12 * 0.5, P5: 10 * 0.3)
     # = 0.6*25 + 0.3*18 + 0.1*15 + 0.2*15 + 0.5*12 + 0.3*10 = 15.0 + 5.4 + 1.5 + 3.0
     # + 6.0 + 3.0 = 33.9
     expected_race_points = 33.9
@@ -112,36 +137,45 @@ def test_constructor_points_calculation(mock_adapter, mock_scorer):
     assert pytest.approx(points["race"], 0.1) == expected_race_points
 
 
-def test_constructor_not_found(mock_adapter, mock_scorer):
+def test_constructor_not_found(mock_race_distribution, mock_scorer):
     """Test handling when constructor is not found."""
-    calculator = ConstructorPointsCalculator(mock_adapter, mock_scorer)
+    calculator = ConstructorPointsCalculator(mock_race_distribution, mock_scorer)
 
     # Configure mock to raise KeyError for unknown constructor
-    mock_adapter.get_constructor_drivers.side_effect = KeyError("Constructor not found")
+    with patch(
+        "gridrival_ai.points.constructor.get_constructor_drivers",
+        side_effect=KeyError("Constructor not found"),
+    ):
 
-    # Calculate should return empty results with zero points
-    points = calculator.calculate("UNKNOWN", RaceFormat.STANDARD)
+        # Calculate should return empty results with zero points
+        points = calculator.calculate("UNKNOWN", RaceFormat.STANDARD)
 
     assert points["qualifying"] == 0.0
     assert points["race"] == 0.0
 
 
-def test_missing_driver_distribution(mock_adapter, mock_scorer):
+def test_missing_driver_distribution(mock_race_distribution, mock_scorer):
     """Test handling when one driver's distribution is missing."""
-    calculator = ConstructorPointsCalculator(mock_adapter, mock_scorer)
+    calculator = ConstructorPointsCalculator(mock_race_distribution, mock_scorer)
 
     # Modify the mock to raise KeyError for one driver but not the other
-    original_side_effect = mock_adapter.get_position_distribution.side_effect
+    original_side_effect = mock_race_distribution.get_driver_distribution.side_effect
 
-    def modified_get_position(driver_id, session):
+    def modified_get_position(driver_id, session_type):
         if driver_id == "LAW":
             raise KeyError(f"No distribution for {driver_id}")
-        return original_side_effect(driver_id, session)
+        return original_side_effect(driver_id, session_type)
 
-    mock_adapter.get_position_distribution.side_effect = modified_get_position
+    mock_race_distribution.get_driver_distribution.side_effect = modified_get_position
 
-    # Calculate should work with only one driver's points
-    points = calculator.calculate("RBR", RaceFormat.STANDARD)
+    # Patch get_constructor_drivers to return fixed drivers
+    with patch(
+        "gridrival_ai.points.constructor.get_constructor_drivers",
+        return_value=("VER", "LAW"),
+    ):
+
+        # Calculate should work with only one driver's points
+        points = calculator.calculate("RBR", RaceFormat.STANDARD)
 
     # Should only include VER's points
     assert points["qualifying"] > 0.0
@@ -159,13 +193,19 @@ def test_missing_driver_distribution(mock_adapter, mock_scorer):
     assert pytest.approx(points["race"], 0.1) == expected_race_points
 
 
-def test_different_race_formats(mock_adapter, mock_scorer):
+def test_different_race_formats(mock_race_distribution, mock_scorer):
     """Test that race format doesn't change constructor points calculation."""
-    calculator = ConstructorPointsCalculator(mock_adapter, mock_scorer)
+    calculator = ConstructorPointsCalculator(mock_race_distribution, mock_scorer)
 
-    # Calculate points for both race formats
-    standard_points = calculator.calculate("RBR", RaceFormat.STANDARD)
-    sprint_points = calculator.calculate("RBR", RaceFormat.SPRINT)
+    # Patch get_constructor_drivers
+    with patch(
+        "gridrival_ai.points.constructor.get_constructor_drivers",
+        return_value=("VER", "LAW"),
+    ):
+
+        # Calculate points for both race formats
+        standard_points = calculator.calculate("RBR", RaceFormat.STANDARD)
+        sprint_points = calculator.calculate("RBR", RaceFormat.SPRINT)
 
     # Points should be the same regardless of race format
     assert standard_points["qualifying"] == sprint_points["qualifying"]
@@ -173,9 +213,9 @@ def test_different_race_formats(mock_adapter, mock_scorer):
     assert len(standard_points) == len(sprint_points)
 
 
-def test_integration_with_position_calculator(mock_adapter, mock_scorer):
+def test_integration_with_position_calculator(mock_race_distribution, mock_scorer):
     """Test that the calculator correctly uses the position calculator."""
-    calculator = ConstructorPointsCalculator(mock_adapter, mock_scorer)
+    calculator = ConstructorPointsCalculator(mock_race_distribution, mock_scorer)
 
     # Patch the position calculator's calculate method to verify it's called correctly
     with patch(
@@ -184,8 +224,14 @@ def test_integration_with_position_calculator(mock_adapter, mock_scorer):
         # Set up the mock to return a fixed value
         mock_calc.return_value = 25.0
 
-        # Calculate constructor points
-        points = calculator.calculate("RBR", RaceFormat.STANDARD)
+        # Patch get_constructor_drivers
+        with patch(
+            "gridrival_ai.points.constructor.get_constructor_drivers",
+            return_value=("VER", "LAW"),
+        ):
+
+            # Calculate constructor points
+            points = calculator.calculate("RBR", RaceFormat.STANDARD)
 
         # Verify that position calculator was called for qualifying and race
         assert mock_calc.call_count == 4  # Twice for each driver (qual + race)

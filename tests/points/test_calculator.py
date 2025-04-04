@@ -12,17 +12,26 @@ import pytest
 
 from gridrival_ai.points.calculator import PointsCalculator
 from gridrival_ai.points.constructor import ConstructorPointsCalculator
-from gridrival_ai.points.distributions import DistributionAdapter
 from gridrival_ai.points.driver import DriverPointsCalculator
-from gridrival_ai.probabilities.registry import DistributionRegistry
+from gridrival_ai.probabilities.distributions import (
+    RaceDistribution,
+    SessionDistribution,
+)
 from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.types import RaceFormat
 
 
 @pytest.fixture
-def mock_registry():
-    """Create a mock distribution registry."""
-    return MagicMock(spec=DistributionRegistry)
+def mock_race_distribution():
+    """Create a mock race distribution."""
+    mock_race = MagicMock(spec=RaceDistribution)
+
+    # Mock session distributions
+    mock_race.race = MagicMock(spec=SessionDistribution)
+    mock_race.qualifying = MagicMock(spec=SessionDistribution)
+    mock_race.sprint = MagicMock(spec=SessionDistribution)
+
+    return mock_race
 
 
 @pytest.fixture
@@ -45,22 +54,26 @@ def mock_driver_stats():
 
 
 @pytest.fixture
-def calculator(mock_registry, mock_scorer, mock_driver_stats):
+def calculator(mock_race_distribution, mock_scorer, mock_driver_stats):
     """Create a PointsCalculator instance with mocks."""
     return PointsCalculator(
         scorer=mock_scorer,
-        probability_registry=mock_registry,
+        race_distribution=mock_race_distribution,
         driver_stats=mock_driver_stats,
     )
 
 
-def test_calculator_initialization(mock_registry, mock_scorer, mock_driver_stats):
+def test_calculator_initialization(
+    mock_race_distribution, mock_scorer, mock_driver_stats
+):
     """Test that the calculator initializes correctly with its dependencies."""
-    calculator = PointsCalculator(mock_scorer, mock_registry, mock_driver_stats)
+    calculator = PointsCalculator(
+        mock_scorer, mock_race_distribution, mock_driver_stats
+    )
 
     # Check that calculator has all required attributes
     assert hasattr(calculator, "scorer")
-    assert hasattr(calculator, "distribution_adapter")
+    assert hasattr(calculator, "race_distribution")
     assert hasattr(calculator, "driver_stats")
     assert hasattr(calculator, "driver_calculator")
     assert hasattr(calculator, "constructor_calculator")
@@ -68,8 +81,7 @@ def test_calculator_initialization(mock_registry, mock_scorer, mock_driver_stats
     # Check that dependencies are correctly assigned
     assert calculator.scorer == mock_scorer
     assert calculator.driver_stats == mock_driver_stats
-    assert isinstance(calculator.distribution_adapter, DistributionAdapter)
-    assert calculator.distribution_adapter.registry == mock_registry
+    assert calculator.race_distribution == mock_race_distribution
 
     # Check that component calculators are initialized
     assert isinstance(calculator.driver_calculator, DriverPointsCalculator)

@@ -17,11 +17,12 @@ from gridrival_ai.points.components import (
     PositionPointsCalculator,
     TeammatePointsCalculator,
 )
-from gridrival_ai.points.distributions import DistributionAdapter
 from gridrival_ai.points.driver import DriverPointsCalculator
 from gridrival_ai.probabilities.distributions import (
     JointDistribution,
     PositionDistribution,
+    RaceDistribution,
+    SessionDistribution,
 )
 from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.types import RaceFormat
@@ -66,35 +67,62 @@ def mock_scorer():
 
 
 @pytest.fixture
-def mock_dist_adapter(position_dist, joint_dist):
-    """Create a mock distribution adapter."""
-    adapter = MagicMock(spec=DistributionAdapter)
+def mock_race_distribution(position_dist, joint_dist):
+    """Create a mock race distribution."""
+    race_dist = MagicMock(spec=RaceDistribution)
 
-    # Set up method returns
-    adapter.get_position_distribution.return_value = position_dist
-    adapter.get_position_distribution_safe.return_value = position_dist
-    adapter.get_joint_distribution_safe.return_value = joint_dist
-    adapter.get_qualifying_race_distribution.return_value = joint_dist
-    adapter.get_completion_probability.return_value = 0.95
+    # Create and set up session distributions
+    race_session = MagicMock(spec=SessionDistribution)
+    qualifying_session = MagicMock(spec=SessionDistribution)
+    sprint_session = MagicMock(spec=SessionDistribution)
 
-    return adapter
+    race_dist.race = race_session
+    race_dist.qualifying = qualifying_session
+    race_dist.sprint = sprint_session
+
+    # Mock get_driver_distribution method
+    race_dist.get_driver_distribution.return_value = position_dist
+
+    # Mock get_qualifying_race_distribution method
+    race_dist.get_qualifying_race_distribution.return_value = joint_dist
+
+    # Mock get_completion_probability method
+    race_dist.get_completion_probability.return_value = 0.95
+
+    # Mock get_session method to return sessions
+    def mock_get_session(session_type):
+        if session_type == "race":
+            return race_session
+        elif session_type == "qualifying":
+            return qualifying_session
+        elif session_type == "sprint":
+            return sprint_session
+        else:
+            raise ValueError(f"Invalid session type: {session_type}")
+
+    race_dist.get_session.side_effect = mock_get_session
+
+    # Set up race_session to return joint distribution
+    race_session.get_joint_distribution.return_value = joint_dist
+
+    return race_dist
 
 
 @pytest.fixture
-def driver_calculator(mock_scorer, mock_dist_adapter):
+def driver_calculator(mock_scorer, mock_race_distribution):
     """Create a driver points calculator with mocked dependencies."""
-    return DriverPointsCalculator(mock_dist_adapter, mock_scorer)
+    return DriverPointsCalculator(mock_race_distribution, mock_scorer)
 
 
 class TestDriverPointsCalculator:
     """Test suite for the DriverPointsCalculator class."""
 
-    def test_initialization(self, mock_scorer, mock_dist_adapter):
+    def test_initialization(self, mock_scorer, mock_race_distribution):
         """Test initialization of driver calculator."""
-        calculator = DriverPointsCalculator(mock_dist_adapter, mock_scorer)
+        calculator = DriverPointsCalculator(mock_race_distribution, mock_scorer)
 
         # Verify attributes
-        assert calculator.distributions is mock_dist_adapter
+        assert calculator.race_distribution is mock_race_distribution
         assert calculator.scorer is mock_scorer
 
         # Verify component calculators
@@ -194,10 +222,15 @@ class TestDriverPointsCalculator:
                             # Verify total
                             assert sum(points.values()) == 176.0
 
-    def test_sprint_fallback(self, driver_calculator, mock_dist_adapter):
-        """Test sprint points calculation with fallback to race distribution."""
-        # Set up adapter to return None for sprint
-        mock_dist_adapter.get_position_distribution_safe.return_value = None
+    def test_sprint_error_fallback(self, driver_calculator, mock_race_distribution):
+        """Test sprint points calculation with fallback to race distribution when error
+        occurs."""
+        # Set up race_distribution to raise error for sprint
+        mock_race_distribution.get_driver_distribution.side_effect = [
+            PositionDistribution({1: 0.6, 2: 0.4}),  # qualifying
+            PositionDistribution({1: 0.7, 2: 0.3}),  # race
+            KeyError("No sprint distribution"),  # sprint error
+        ]
 
         # Mock component calculators to focus on sprint handling
         with patch.object(PositionPointsCalculator, "calculate") as mock_position:
@@ -226,10 +259,15 @@ class TestDriverPointsCalculator:
                 args[1], driver_calculator.scorer.tables.driver_points[2]
             )
 
-    def test_missing_teammate_distribution(self, driver_calculator, mock_dist_adapter):
-        """Test points calculation with missing teammate distribution."""
-        # Set up adapter to return None for teammate joint
-        mock_dist_adapter.get_joint_distribution_safe.return_value = None
+    def test_missing_teammate_joint_distribution(
+        self, driver_calculator, mock_race_distribution
+    ):
+        """Test points calculation with missing teammate joint distribution."""
+        # Set up race_session to raise error for get_joint_distribution
+        race_session = mock_race_distribution.get_session("race")
+        race_session.get_joint_distribution.side_effect = KeyError(
+            "No joint distribution"
+        )
 
         # Calculate points
         points = driver_calculator.calculate(
@@ -242,7 +280,30 @@ class TestDriverPointsCalculator:
         # Verify teammate points are 0
         assert points["teammate"] == 0.0
 
-    def test_calculator_api(self, driver_calculator, mock_dist_adapter):
+    def test_missing_completion_probability(
+        self, driver_calculator, mock_race_distribution
+    ):
+        """Test handling of missing completion probability."""
+        # Set up race_distribution to raise error for completion probability
+        mock_race_distribution.get_completion_probability.side_effect = KeyError(
+            "No completion prob"
+        )
+
+        # Calculate points
+        points = driver_calculator.calculate(
+            driver_id="VER",
+            rolling_avg=1.5,
+            teammate_id="HAM",
+            race_format=RaceFormat.STANDARD,
+        )
+
+        # Should still have completion points (using default value)
+        assert "completion" in points
+        assert (
+            points["completion"] > 0
+        )  # Should have some points with default probability
+
+    def test_calculator_api(self, driver_calculator, mock_race_distribution):
         """Test driver calculator adheres to expected API."""
         # Calculate points
         points = driver_calculator.calculate(  # noqa: F841
@@ -253,18 +314,23 @@ class TestDriverPointsCalculator:
         )
 
         # Verify expected API calls
-        mock_dist_adapter.get_position_distribution.assert_any_call("VER", "qualifying")
-        mock_dist_adapter.get_position_distribution.assert_any_call("VER", "race")
-        mock_dist_adapter.get_qualifying_race_distribution.assert_called_with("VER")
-        mock_dist_adapter.get_joint_distribution_safe.assert_called_with(
-            "VER", "HAM", "race"
+        mock_race_distribution.get_driver_distribution.assert_any_call(
+            "VER", "qualifying"
         )
-        mock_dist_adapter.get_completion_probability.assert_called_with("VER")
+        mock_race_distribution.get_driver_distribution.assert_any_call("VER", "race")
+        mock_race_distribution.get_qualifying_race_distribution.assert_called_with(
+            "VER"
+        )
+        race_session = mock_race_distribution.get_session("race")
+        race_session.get_joint_distribution.assert_called_with("VER", "HAM")
+        mock_race_distribution.get_completion_probability.assert_called_with("VER")
 
-    def test_missing_distribution_error(self, driver_calculator, mock_dist_adapter):
+    def test_missing_distribution_error(
+        self, driver_calculator, mock_race_distribution
+    ):
         """Test error handling with missing required distribution."""
-        # Set up adapter to raise KeyError
-        mock_dist_adapter.get_position_distribution.side_effect = KeyError(
+        # Set up race_distribution to raise KeyError
+        mock_race_distribution.get_driver_distribution.side_effect = KeyError(
             "No distribution found"
         )
 
@@ -276,7 +342,3 @@ class TestDriverPointsCalculator:
                 teammate_id="HAM",
                 race_format=RaceFormat.STANDARD,
             )
-
-
-if __name__ == "__main__":
-    pytest.main(["-v"])
