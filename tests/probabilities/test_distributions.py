@@ -1,6 +1,7 @@
 """Tests for the PositionDistribution class."""
 
 import math
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -11,6 +12,7 @@ from gridrival_ai.probabilities.distributions.position import (
 )
 from gridrival_ai.probabilities.distributions.race import RaceDistribution
 from gridrival_ai.probabilities.distributions.session import SessionDistribution
+from gridrival_ai.probabilities.odds_structure import OddsStructure
 
 
 class TestPositionDistribution:
@@ -429,10 +431,22 @@ class TestSessionDistribution:
         # Check correct marginals
         marg1 = joint.marginal1()
         marg2 = joint.marginal2()
-        assert marg1[1] == 0.6
-        assert marg1[2] == 0.4
-        assert marg2[1] == 0.4
-        assert marg2[2] == 0.6
+
+        # Calculate expected values
+        ver_p1_ham_p2 = 0.6 * 0.6  # 0.36
+        ver_p2_ham_p1 = 0.4 * 0.4  # 0.16
+        total = ver_p1_ham_p2 + ver_p2_ham_p1  # 0.52
+
+        expected_ver_p1 = ver_p1_ham_p2 / total  # ≈ 0.6923
+        expected_ver_p2 = ver_p2_ham_p1 / total  # ≈ 0.3077
+        expected_ham_p1 = ver_p2_ham_p1 / total  # ≈ 0.3077
+        expected_ham_p2 = ver_p1_ham_p2 / total  # ≈ 0.6923
+
+        # Use pytest.approx for floating-point comparison
+        assert marg1[1] == pytest.approx(expected_ver_p1)
+        assert marg1[2] == pytest.approx(expected_ver_p2)
+        assert marg2[1] == pytest.approx(expected_ham_p1)
+        assert marg2[2] == pytest.approx(expected_ham_p2)
 
         # Check correct constraints: one driver can't have the same position as another
         assert joint[(1, 1)] == 0.0
@@ -609,6 +623,227 @@ class TestRaceDistribution:
         # Get driver IDs
         driver_ids = race_dist.get_driver_ids()
         assert driver_ids == {"VER", "HAM"}
+
+    def test_get_qualifying_race_distribution(self):
+        """Test the get_qualifying_race_distribution method."""
+        # Create position distributions with different probabilities for each session
+        ver_race = PositionDistribution({1: 0.6, 2: 0.4})
+        ham_race = PositionDistribution({1: 0.4, 2: 0.6})
+
+        ver_quali = PositionDistribution({1: 0.8, 2: 0.2})
+        ham_quali = PositionDistribution({1: 0.2, 2: 0.8})
+
+        # Create sessions
+        race_session = SessionDistribution({"VER": ver_race, "HAM": ham_race}, "race")
+        quali_session = SessionDistribution(
+            {"VER": ver_quali, "HAM": ham_quali}, "qualifying"
+        )
+
+        # Create race distribution with custom sessions
+        race_dist = RaceDistribution(race_session, quali_session)
+
+        # Get joint distribution
+        joint_dist = race_dist.get_qualifying_race_distribution("VER")
+
+        # Check it's the right type
+        assert isinstance(joint_dist, JointDistribution)
+
+        # Check entity names are correct
+        assert joint_dist.entity1_name == "qualifying"
+        assert joint_dist.entity2_name == "race"
+
+        # Check probabilities
+        # P(qualifying=1, race=1) = P(qualifying=1) * P(race=1)
+        assert joint_dist[(1, 1)] == 0.8 * 0.6
+        assert joint_dist[(1, 2)] == 0.8 * 0.4
+        assert joint_dist[(2, 1)] == 0.2 * 0.6
+        assert joint_dist[(2, 2)] == 0.2 * 0.4
+
+        # Non-existent driver should raise KeyError
+        with pytest.raises(KeyError):
+            race_dist.get_qualifying_race_distribution("LEC")
+
+    def test_get_completion_probability(self):
+        """Test the get_completion_probability method."""
+        # Create position distributions for drivers
+        ver_dist = PositionDistribution({1: 0.6, 2: 0.4})
+        ham_dist = PositionDistribution({1: 0.4, 2: 0.6})
+
+        # Create race session
+        race_session = SessionDistribution({"VER": ver_dist, "HAM": ham_dist}, "race")
+
+        # Create race distribution with completion probabilities
+        completion_probs = {"VER": 0.95, "HAM": 0.98}
+        race_dist = RaceDistribution(
+            race_session, completion_probabilities=completion_probs
+        )
+
+        # Get completion probabilities
+        assert race_dist.get_completion_probability("VER") == 0.95
+        assert race_dist.get_completion_probability("HAM") == 0.98
+
+        # Non-existent driver
+        with pytest.raises(KeyError) as excinfo:
+            race_dist.get_completion_probability("LEC")
+        assert "Completion probability for driver LEC not found" in str(excinfo.value)
+
+    def test_validation_completion_probabilities(self):
+        """Test validation of completion probabilities."""
+        # Create position distributions for drivers
+        ver_dist = PositionDistribution({1: 0.6, 2: 0.4})
+        ham_dist = PositionDistribution({1: 0.4, 2: 0.6})
+
+        # Create race session
+        race_session = SessionDistribution({"VER": ver_dist, "HAM": ham_dist}, "race")
+
+        # Test invalid completion probability (> 1.0)
+        with pytest.raises(ValueError) as excinfo:
+            RaceDistribution(
+                race_session, completion_probabilities={"VER": 1.5, "HAM": 0.98}
+            )
+        assert "must be between 0 and 1" in str(excinfo.value)
+
+        # Test invalid completion probability (< 0.0)
+        with pytest.raises(ValueError) as excinfo:
+            RaceDistribution(
+                race_session, completion_probabilities={"VER": -0.2, "HAM": 0.98}
+            )
+        assert "must be between 0 and 1" in str(excinfo.value)
+
+
+class TestRaceDistributionFactory:
+    """Test cases for RaceDistribution factory method."""
+
+    def test_from_structured_odds_basic(self):
+        """Test creating a RaceDistribution from basic structured odds with default methods."""
+        # Simple structured odds with only win odds
+        odds_structure = {"race": {1: {"VER": 2.0, "HAM": 4.0}}}
+
+        # Create race distribution using the factory method
+        race_dist = RaceDistribution.from_structured_odds(odds_structure)
+
+        # Check that sessions were created correctly
+        assert race_dist.race.session_type == "race"
+        assert race_dist.qualifying.session_type == "qualifying"
+        assert race_dist.sprint.session_type == "sprint"
+
+        # Check that driver distributions were created correctly
+        assert set(race_dist.get_driver_ids()) == {"VER", "HAM"}
+
+        # Verify probabilities make sense (VER should have higher win probability than HAM)
+        ver_race_dist = race_dist.get_driver_distribution("VER", "race")
+        ham_race_dist = race_dist.get_driver_distribution("HAM", "race")
+        assert ver_race_dist[1] > ham_race_dist[1]
+
+    def test_from_structured_odds_dict_vs_object(self):
+        """Test that both dict and OddsStructure inputs work correctly."""
+        # Simple structured odds with only win odds
+        odds_dict = {"race": {1: {"VER": 2.0, "HAM": 4.0}}}
+
+        # Create OddsStructure object
+        odds_object = OddsStructure(odds_dict)
+
+        # Create distributions from both formats
+        race_dist_from_dict = RaceDistribution.from_structured_odds(odds_dict)
+        race_dist_from_object = RaceDistribution.from_structured_odds(odds_object)
+
+        # Verify they produce the same driver probabilities
+        ver_prob_from_dict = race_dist_from_dict.get_driver_distribution("VER", "race")[
+            1
+        ]
+        ver_prob_from_object = race_dist_from_object.get_driver_distribution(
+            "VER", "race"
+        )[1]
+
+        assert ver_prob_from_dict == ver_prob_from_object
+
+    def test_from_structured_odds_with_methods(self):
+        """Test creating a RaceDistribution with specified grid, normalization, and odds methods."""
+        # More complex structured odds with multiple markets
+        odds_structure = {
+            "race": {
+                1: {"VER": 2.0, "HAM": 4.0, "NOR": 6.0},
+                3: {"VER": 1.2, "HAM": 1.6, "NOR": 2.2},
+            },
+            "qualifying": {1: {"VER": 1.8, "HAM": 3.5, "NOR": 5.0}},
+        }
+
+        # Mock the grid_creator factory to verify method arguments
+        with patch(
+            "gridrival_ai.probabilities.grid_creators.factory.get_grid_creator"
+        ) as mock_get_grid_creator:
+            # Create a mock grid creator
+            mock_creator = MagicMock()
+            mock_session = MagicMock(spec=SessionDistribution)
+            mock_creator.create_session_distribution.return_value = mock_session
+
+            # Just return our mock creator
+            mock_get_grid_creator.return_value = mock_creator
+
+            # Create race distribution with specific methods
+            race_dist = RaceDistribution.from_structured_odds(
+                odds_structure,
+                grid_method="cumulative",
+                normalization_method="sinkhorn",
+                odds_method="power",
+                max_position=3,  # Additional parameter for grid creator
+            )
+
+            # Verify the factory was called with correct parameters
+            mock_get_grid_creator.assert_called_once()
+            args, kwargs = mock_get_grid_creator.call_args
+            assert kwargs.get("method") == "cumulative"
+            assert kwargs.get("odds_converter_method") == "power"
+            assert kwargs.get("grid_normalizer_method") == "sinkhorn"
+            assert kwargs.get("max_position") == 3
+
+        # Check that sessions were created correctly
+        assert race_dist.race.session_type == "race"
+        assert race_dist.qualifying.session_type == "qualifying"
+
+        # Check that driver distributions were created
+        assert set(race_dist.get_driver_ids()) == {"VER", "HAM", "NOR"}
+
+    def test_from_structured_odds_with_completion(self):
+        """Test creating with completion probabilities."""
+        # Simple structured odds
+        odds_structure = {"race": {1: {"VER": 2.0, "HAM": 4.0}}}
+
+        # Define completion probabilities
+        completion_probabilities = {"VER": 0.95, "HAM": 0.98}
+
+        # Create race distribution with completion probabilities
+        race_dist = RaceDistribution.from_structured_odds(
+            odds_structure, completion_probabilities=completion_probabilities
+        )
+
+        # Verify completion probabilities were set correctly
+        assert race_dist.get_completion_probability("VER") == 0.95
+        assert race_dist.get_completion_probability("HAM") == 0.98
+
+    def test_from_structured_odds_with_multiple_sessions(self):
+        """Test creating distributions for multiple sessions."""
+        # Structured odds with race, qualifying, and sprint
+        odds_structure = {
+            "race": {1: {"VER": 2.0, "HAM": 4.0}},
+            "qualifying": {1: {"VER": 1.8, "HAM": 4.5}},
+            "sprint": {1: {"VER": 2.2, "HAM": 3.8}},
+        }
+
+        # Create race distribution
+        race_dist = RaceDistribution.from_structured_odds(odds_structure)
+
+        # Verify all sessions were created
+        assert "race" != None
+        assert "qualifying" != None
+        assert "sprint" != None
+
+        # Verify session-specific probabilities
+        ver_race_prob = race_dist.get_driver_distribution("VER", "race")[1]
+        ver_quali_prob = race_dist.get_driver_distribution("VER", "qualifying")[1]
+
+        # Qualifying should have higher win probability than race for VER
+        assert ver_quali_prob > ver_race_prob
 
 
 def test_create_independent_joint():

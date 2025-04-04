@@ -27,7 +27,7 @@ def position_distribution():
 def joint_distribution():
     """Create a sample joint distribution."""
     probs = {(1, 1): 0.4, (1, 2): 0.2, (2, 1): 0.1, (2, 2): 0.3}
-    return JointDistribution(probs, outcome1_name="qual", outcome2_name="race")
+    return JointDistribution(probs, entity1_name="qual", entity2_name="race")
 
 
 @pytest.fixture

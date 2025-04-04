@@ -16,7 +16,6 @@ from gridrival_ai.probabilities.distributions import (
     SessionDistribution,
 )
 from gridrival_ai.probabilities.grid_creators.base import GridCreator
-from gridrival_ai.probabilities.normalizers import get_grid_normalizer
 from gridrival_ai.probabilities.odds_structure import OddsStructure
 
 
@@ -501,7 +500,7 @@ class CumulativeGridCreator(GridCreator):
         for threshold in sorted(driver_probs.keys()):
             prob = max(driver_probs[threshold], prev_prob)
             ordered_probs[threshold] = prob
-            prev_threshold = threshold
+            prev_threshold = threshold  # noqa: F841
             prev_prob = prob
 
         return ordered_probs, driver_quality

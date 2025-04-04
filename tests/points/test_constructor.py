@@ -26,10 +26,10 @@ def mock_adapter():
     adapter.get_constructor_drivers.return_value = ("VER", "LAW")
 
     # Mock position distributions
-    ver_qual = PositionDistribution({1: 0.7, 2: 0.2, 3: 0.1})
-    law_qual = PositionDistribution({3: 0.3, 4: 0.4, 5: 0.3})
-    ver_race = PositionDistribution({1: 0.6, 2: 0.3, 3: 0.1})
-    law_race = PositionDistribution({3: 0.2, 4: 0.5, 5: 0.3})
+    ver_qual = PositionDistribution({1: 0.7, 2: 0.2, 3: 0.1,4:0,5:0})
+    law_qual = PositionDistribution({1:0,2:0,3: 0.3, 4: 0.4, 5: 0.3})
+    ver_race = PositionDistribution({1: 0.6, 2: 0.3, 3: 0.1,4:0,5:0})
+    law_race = PositionDistribution({1:0,2:0,3: 0.2, 4: 0.5, 5: 0.3})
 
     # Configure adapter to return position distributions
     def get_position_distribution(driver_id, session):

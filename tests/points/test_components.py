@@ -87,7 +87,7 @@ class TestPositionPointsCalculator:
         calculator = PositionPointsCalculator()
 
         # Position distribution with some zero-probability positions
-        position_dist = PositionDistribution({1: 0.5, 3: 0.5})  # No P2
+        position_dist = PositionDistribution({1: 0.5, 2: 0.0, 3: 0.5})  # No P2
 
         # Points table
         points_table = np.array([0, 25, 18, 15])  # Points for P0, P1, P2, P3
@@ -134,7 +134,7 @@ class TestOvertakePointsCalculator:
         }
 
         joint_dist = JointDistribution(
-            joint_probs, outcome1_name="qualifying", outcome2_name="race"
+            joint_probs, entity1_name="qualifying", entity2_name="race"
         )
 
         # 2 points per position gained
@@ -159,7 +159,7 @@ class TestOvertakePointsCalculator:
         }
 
         joint_dist = JointDistribution(
-            joint_probs, outcome1_name="qualifying", outcome2_name="race"
+            joint_probs, entity1_name="qualifying", entity2_name="race"
         )
 
         multiplier = 2.0
@@ -182,7 +182,7 @@ class TestOvertakePointsCalculator:
         }
 
         joint_dist = JointDistribution(
-            joint_probs, outcome1_name="qualifying", outcome2_name="race"
+            joint_probs, entity1_name="qualifying", entity2_name="race"
         )
 
         multiplier = 2.0
@@ -203,7 +203,7 @@ class TestOvertakePointsCalculator:
         }
 
         joint_dist = JointDistribution(
-            joint_probs, outcome1_name="qualifying", outcome2_name="race"
+            joint_probs, entity1_name="qualifying", entity2_name="race"
         )
 
         # 5 points per position gained
@@ -232,7 +232,7 @@ class TestTeammatePointsCalculator:
         }
 
         joint_dist = JointDistribution(
-            joint_probs, outcome1_name="driver", outcome2_name="teammate"
+            joint_probs, entity1_name="driver", entity2_name="teammate"
         )
 
         # Thresholds: [margin, points]
@@ -258,7 +258,7 @@ class TestTeammatePointsCalculator:
         }
 
         joint_dist = JointDistribution(
-            joint_probs, outcome1_name="driver", outcome2_name="teammate"
+            joint_probs, entity1_name="driver", entity2_name="teammate"
         )
 
         # Thresholds: [margin, points]
@@ -284,7 +284,7 @@ class TestTeammatePointsCalculator:
         }
 
         joint_dist = JointDistribution(
-            joint_probs, outcome1_name="driver", outcome2_name="teammate"
+            joint_probs, entity1_name="driver", entity2_name="teammate"
         )
 
         thresholds = np.array([[2, 2], [5, 5], [10, 8]])
@@ -308,7 +308,7 @@ class TestTeammatePointsCalculator:
         }
 
         joint_dist = JointDistribution(
-            joint_probs, outcome1_name="driver", outcome2_name="teammate"
+            joint_probs, entity1_name="driver", entity2_name="teammate"
         )
 
         thresholds = np.array([[2, 2], [5, 5], [10, 8]])
