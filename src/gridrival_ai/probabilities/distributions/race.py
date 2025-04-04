@@ -322,9 +322,26 @@ class RaceDistribution:
         grid_creator = get_grid_creator(method=grid_method, **kwargs)
 
         # Create and set the converter and normalizer separately
-        grid_creator.odds_converter = get_odds_converter(method=odds_method, **kwargs)
+        # Only pass relevant parameters to each component
+
+        # Filter kwargs for the odds converter
+        odds_converter_kwargs = {
+            k: v
+            for k, v in kwargs.items()
+            if k not in ["max_position"]  # Add other grid-specific params here
+        }
+        grid_creator.odds_converter = get_odds_converter(
+            method=odds_method, **odds_converter_kwargs
+        )
+
+        # Filter kwargs for the grid normalizer
+        grid_normalizer_kwargs = {
+            k: v
+            for k, v in kwargs.items()
+            if k not in ["max_position"]  # Add other grid-specific params here
+        }
         grid_creator.grid_normalizer = get_grid_normalizer(
-            method=normalization_method, **kwargs
+            method=normalization_method, **grid_normalizer_kwargs
         )
 
         # Create session distributions for available sessions

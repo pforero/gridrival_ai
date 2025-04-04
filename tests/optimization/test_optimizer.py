@@ -333,7 +333,7 @@ class TestTeamOptimizer:
 
         # Should not find a solution
         assert result.best_solution is None
-        assert "No valid team composition" in result.error_message
+        assert "No valid team found" in result.error_message
 
     def test_locked_in_constructor(self, optimizer):
         """Test optimization with locked-in constructor."""
