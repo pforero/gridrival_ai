@@ -1,8 +1,7 @@
 from gridrival_ai.data.fantasy import FantasyLeagueData
 from gridrival_ai.optimization.optimizer import TeamOptimizer
 from gridrival_ai.points.calculator import PointsCalculator
-from gridrival_ai.probabilities.factory import DistributionFactory
-from gridrival_ai.probabilities.registry import DistributionRegistry
+from gridrival_ai.probabilities.distributions import RaceDistribution
 from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.types import RaceFormat
 
@@ -44,7 +43,7 @@ constructor_salaries = {
     "SAU": 6.9,  # Kick Sauber (from additional screenshot)
 }
 
-# Driver's 8-race rolling average finish positions (could be updated with more accurate data)
+# Driver's 8-race rolling average finish positions
 rolling_averages = {
     "VER": 2,
     "NOR": 2,
@@ -169,7 +168,7 @@ sprint_top8_odds = {
     "ALB": 1.61,  # Alex Albon
     "SAI": 1.67,  # Carlos Sainz
     "TSU": 3.50,  # Yuki Tsunoda
-    "LAW": 3.50,  # Liam Lawson (using value from light-colored box as dark blue wasn't visible)
+    "LAW": 3.50,  # Liam Lawson
     "GAS": 3.75,  # Pierre Gasly
     "ALO": 7.00,  # Fernando Alonso
     "STR": 11.00,  # Lance Stroll
@@ -313,13 +312,7 @@ def main():
     )
 
     # Step 2: Create distribution registry and populate with race probabilities
-    # First create an empty registry
-    registry = DistributionRegistry()
-
-    # Use the factory to populate the registry with distributions
-    # Properly organizing odds for each session type
-    DistributionFactory.register_structured_odds(
-        registry=registry,
+    race_dist = RaceDistribution.from_structured_odds(
         odds_structure={
             "sprint": {
                 1: sprint_winning_odds,  # Win probabilities for sprint race
@@ -337,7 +330,7 @@ def main():
                 1: qualifying_win_odds  # Qualifying pole position probabilities
             },
         },
-        method="basic",
+        method="cumulative",
     )
 
     # Step 3: Set up scoring calculator
@@ -345,14 +338,14 @@ def main():
 
     # Step 4: Create points calculator
     points_calculator = PointsCalculator(
-        scorer=scorer, probability_registry=registry, driver_stats=rolling_averages
+        scorer=scorer, race_distribution=race_dist, driver_stats=rolling_averages
     )
 
     # Step 5: Create and run the optimizer
     optimizer = TeamOptimizer(
         league_data=league_data,
         points_calculator=points_calculator,
-        probability_registry=registry,
+        race_distribution=race_dist,
         driver_stats=rolling_averages,
         budget=98.1,  # Updated budget is £98.1M
     )

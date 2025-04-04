@@ -1,8 +1,7 @@
 from gridrival_ai.data.fantasy import FantasyLeagueData
 from gridrival_ai.optimization.optimizer import TeamOptimizer
 from gridrival_ai.points.calculator import PointsCalculator
-from gridrival_ai.probabilities.factory import DistributionFactory
-from gridrival_ai.probabilities.registry import DistributionRegistry
+from gridrival_ai.probabilities.distributions import RaceDistribution
 from gridrival_ai.scoring.calculator import ScoringCalculator
 from gridrival_ai.scoring.types import RaceFormat
 
@@ -101,16 +100,12 @@ def main():
         rolling_averages=rolling_averages,
     )
 
-    # Step 2: Create distribution registry and populate with race probabilities
-    # First create an empty registry
-    registry = DistributionRegistry()
-
-    # Then use the factory to populate the registry with distributions
-    # based on the winning odds
-    DistributionFactory.register_structured_odds(
-        registry=registry,
+    # Step 2: Create race distribution from odds
+    race_dist = RaceDistribution.from_structured_odds(
         odds_structure={"race": {1: winning_odds}},
-        method="basic",  # Using basic odds conversion method
+        grid_method="harville",
+        normalization_method="sinkhorn",
+        odds_method="basic",
     )
 
     # Step 3: Set up scoring calculator
@@ -118,14 +113,14 @@ def main():
 
     # Step 4: Create points calculator
     points_calculator = PointsCalculator(
-        scorer=scorer, probability_registry=registry, driver_stats=rolling_averages
+        scorer=scorer, race_distribution=race_dist, driver_stats=rolling_averages
     )
 
     # Step 5: Create and run the optimizer
     optimizer = TeamOptimizer(
         league_data=league_data,
         points_calculator=points_calculator,
-        probability_registry=registry,
+        race_distribution=race_dist,
         driver_stats=rolling_averages,
     )
 
