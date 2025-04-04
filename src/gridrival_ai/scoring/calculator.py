@@ -837,13 +837,13 @@ class ScoringCalculator:
     ) -> DriverPointsBreakdown:
         """Create a DriverPointsBreakdown from component dictionary."""
         return DriverPointsBreakdown(
-            qualifying=components.get("qualifying", 0.0),
             race=components.get("race", 0.0),
+            qualifying=components.get("qualifying", 0.0),
             sprint=components.get("sprint", 0.0),
             overtake=components.get("overtake", 0.0),
+            completion=components.get("completion", 0.0),
             improvement=components.get("improvement", 0.0),
             teammate=components.get("teammate", 0.0),
-            completion=components.get("completion", 0.0),
         )
 
     def _expected_position_points(
