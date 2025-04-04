@@ -128,6 +128,19 @@ class TeamSolution(NamedTuple):
     total_cost: float
     points_breakdown: dict[str, dict[str, float] | float]
 
+    def __repr__(self) -> str:
+        """Return a string representation with key team information."""
+        non_talent_drivers = [d for d in self.drivers if d != self.talent_driver]
+        sorted_drivers = sorted(non_talent_drivers, reverse=True)
+
+        return (
+            f"Team: {', '.join(sorted_drivers)} | "
+            f"Talent: {self.talent_driver} | "
+            f"Constructor: {self.constructor} | "
+            f"Points: {self.expected_points:.1f} | "
+            f"Cost: £{self.total_cost:.1f}M"
+        )
+
 
 @dataclass
 class OptimizationResult:
