@@ -44,7 +44,17 @@ def simple_config():
             10: 1,
             **{i: 0 for i in range(11, 21)},
         },
-        sprint_points={1: 8, 2: 7, 3: 6, 4: 5, 5: 4, 6: 3, 7: 2, 8: 1},
+        sprint_points={
+            1: 8,
+            2: 7,
+            3: 6,
+            4: 5,
+            5: 4,
+            6: 3,
+            7: 2,
+            8: 1,
+            **{i: 0 for i in range(9, 21)},
+        },
         constructor_qualifying_points={
             1: 5,
             2: 4,
@@ -265,7 +275,7 @@ class TestScoringCalculator:
 
         with pytest.raises(Exception):
             DriverPositions(
-                qualifying=1, race=1, sprint_finish=9
+                qualifying=1, race=1, sprint_finish=22
             )  # Invalid sprint position
 
     def test_joint_distribution_overtakes(self, calculator):

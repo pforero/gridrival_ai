@@ -185,7 +185,7 @@ class DriverPositions:
     race : int
         Race finish position (1-20)
     sprint_finish : int | None, optional
-        Sprint race position (1-8) for sprint weekends
+        Sprint race position (1-20) for sprint weekends
     """
 
     qualifying: int
@@ -196,7 +196,7 @@ class DriverPositions:
         validate_position(qualifying, "qualifying")
         validate_position(race, "race")
         if sprint_finish is not None:
-            validate_position(sprint_finish, "sprint", max_pos=8)
+            validate_position(sprint_finish, "sprint", max_pos=20)
         object.__setattr__(self, "qualifying", qualifying)
         object.__setattr__(self, "race", race)
         object.__setattr__(self, "sprint_finish", sprint_finish)

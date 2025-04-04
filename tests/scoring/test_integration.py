@@ -18,7 +18,7 @@ def custom_config_dict():
     return {
         "qualifying_points": {str(i): 21 - i for i in range(1, 21)},
         "race_points": {str(i): 41 - (i * 2) for i in range(1, 21)},
-        "sprint_points": {str(i): 9 - i for i in range(1, 9)},
+        "sprint_points": {str(i): 21 - i for i in range(1, 21)},
         "constructor_qualifying_points": {str(i): 11 - (i // 2) for i in range(1, 21)},
         "constructor_race_points": {str(i): 21 - i for i in range(1, 21)},
         "improvement_points": {"1": 1, "2": 3, "3": 5, "4": 7, "5": 9},
@@ -188,7 +188,7 @@ class TestScoringIntegration:
         # Test individual component methods
         assert calculator.calculate_qualifying_points(1) == 20
         assert calculator.calculate_race_points(1) == 39
-        assert calculator.calculate_sprint_points(1) == 8
+        assert calculator.calculate_sprint_points(1) == 20
         assert calculator.calculate_overtake_points(10, 5) == 7.5  # 5 positions * 1.5
         assert calculator.calculate_improvement_points(1, 5.0) == 7  # 4 positions ahead
         assert calculator.calculate_teammate_points(1, 10) == 9  # 9 positions ahead
@@ -214,9 +214,9 @@ class TestScoringIntegration:
         # Expected components
         assert points.qualifying == 48  # P2 in qualifying
         assert points.race == 100  # P1 in race
-        assert points.sprint == 7  # P2 in sprint
+        assert points.sprint == 19  # P2 in sprint
         assert points.overtake == 3  # 1 position gained * 3.0
-        assert points.improvement == 4  # 2 positions ahead
+        assert points.improvement == 2  # 2 positions ahead
         assert points.teammate == 5  # 4 positions ahead
         assert points.completion == 12  # Full completion
 

@@ -43,7 +43,17 @@ def simple_config():
             10: 1,
             **{i: 0 for i in range(11, 21)},
         },
-        sprint_points={1: 8, 2: 7, 3: 6, 4: 5, 5: 4, 6: 3, 7: 2, 8: 1},
+        sprint_points={
+            1: 8,
+            2: 7,
+            3: 6,
+            4: 5,
+            5: 4,
+            6: 3,
+            7: 2,
+            8: 1,
+            **{i: 0 for i in range(9, 21)},
+        },
         constructor_qualifying_points={
             1: 5,
             2: 4,
@@ -252,15 +262,18 @@ class TestScoringEngine:
         assert len(points) == 3
 
         # Check scenario 1: Perfect race
-        # 10 (qualifying) + 25 (race) + 8 (sprint) + 0 (overtake) + 2 (improvement) + 2 (teammate) + 12 (completion) = 59
+        # 10 (qualifying) + 25 (race) + 8 (sprint) + 0 (overtake) + 2 (improvement)
+        # + 2 (teammate) + 12 (completion) = 59
         assert points[0] == 59
 
         # Check scenario 2: Overtaking
-        # 0 (qualifying P10) + 10 (race P5) + 0 (no sprint) + 10 (5 positions * 2) + 6 (3 positions ahead) + 2 (beat teammate) + 12 (completion) = 40
+        # 0 (qualifying P10) + 10 (race P5) + 0 (no sprint) + 10 (5 positions * 2)
+        # + 6 (3 positions ahead) + 2 (beat teammate) + 12 (completion) = 40
         assert points[1] == 40
 
         # Check scenario 3: Partial completion
-        # 6 (qualifying P3) + 18 (race P2) + 0 (no sprint) + 2 (1 position * 2) + 6 (3 positions ahead) + 0 (behind teammate) + 6 (2 stages) = 38
+        # 6 (qualifying P3) + 18 (race P2) + 0 (no sprint) + 2 (1 position * 2)
+        # + 6 (3 positions ahead) + 0 (behind teammate) + 6 (2 stages) = 38
         assert points[2] == 38
 
     def test_calculate_constructor_batch(self, engine):

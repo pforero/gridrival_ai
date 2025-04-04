@@ -31,7 +31,6 @@ from gridrival_ai.scoring.constants import (
     MAX_MULTIPLIER,
     MAX_POINTS,
     MAX_POSITION,
-    MAX_SPRINT_POSITION,
     MIN_MULTIPLIER,
     MIN_POINTS,
 )
@@ -141,9 +140,7 @@ class ScoringConfig:
         self._validate_positions(self.race_points, "race_points", MAX_POSITION)
 
         # Validate sprint points
-        self._validate_positions(
-            self.sprint_points, "sprint_points", MAX_SPRINT_POSITION
-        )
+        self._validate_positions(self.sprint_points, "sprint_points", MAX_POSITION)
 
     def _validate_constructor_points(self) -> None:
         """Validate constructor position-based point mappings."""

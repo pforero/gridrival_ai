@@ -28,7 +28,7 @@ def valid_config_dict():
     return {
         "qualifying_points": {str(i): 52 - (i * 2) for i in range(1, 21)},
         "race_points": {str(i): 103 - (i * 3) for i in range(1, 21)},
-        "sprint_points": {str(i): 9 - i for i in range(1, 9)},
+        "sprint_points": {str(i): 21 - i for i in range(1, 21)},
         "constructor_qualifying_points": {str(i): 26 - i for i in range(1, 21)},
         "constructor_race_points": {str(i): 52 - (i * 2) for i in range(1, 21)},
         "completion_stage_points": 3.0,
@@ -75,7 +75,7 @@ def test_json_loading(config_file):
     config = ScoringConfig.from_json(config_file)
     assert config.qualifying_points[1] == 50
     assert config.race_points[1] == 100
-    assert config.sprint_points[1] == 8
+    assert config.sprint_points[1] == 20
     assert config.constructor_qualifying_points[1] == 25
     assert config.constructor_race_points[1] == 50
     assert config.completion_stage_points == 3.0
@@ -211,12 +211,12 @@ def test_sprint_position_validation():
     """Test validation of sprint position limits."""
     # Invalid sprint position (above 8)
     with pytest.raises(ConfigurationError, match="must be between"):
-        ScoringConfig(sprint_points={9: 1})
+        ScoringConfig(sprint_points={21: 1})
 
     # Valid sprint positions (1-8 only)
-    config = ScoringConfig(sprint_points={i: 9 - i for i in range(1, 9)})
-    assert len(config.sprint_points) == 8
-    assert max(config.sprint_points.keys()) == 8
+    config = ScoringConfig(sprint_points={i: 21 - i for i in range(1, 21)})
+    assert len(config.sprint_points) == 20
+    assert max(config.sprint_points.keys()) == 20
 
 
 def test_save_error_handling(tmp_path):

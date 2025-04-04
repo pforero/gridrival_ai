@@ -16,29 +16,31 @@ DEFAULT_QUALIFYING_POINTS = {i: 52 - (i * 2) for i in range(1, 21)}
 # Default race points (P1-P20)
 DEFAULT_RACE_POINTS = {i: 103 - (i * 3) for i in range(1, 21)}
 
-# Default sprint points (P1-P8 only)
-DEFAULT_SPRINT_POINTS = {
-    1: 8,
-    2: 7,
-    3: 6,
-    4: 5,
-    5: 4,
-    6: 3,
-    7: 2,
-    8: 1,
-}
+# Default sprint points (P1-P20)
+DEFAULT_SPRINT_POINTS = {i: 21 - i for i in range(1, 21)}
 
 # Default improvement points for positions gained vs 8-race average
 DEFAULT_IMPROVEMENT_POINTS = {
-    1: 2,  # 1 position ahead
-    2: 4,  # 2 positions ahead
-    3: 6,  # 3 positions ahead
-    4: 9,  # 4 positions ahead
-    5: 12,  # 5 positions ahead
-    6: 16,  # 6 positions ahead
-    7: 20,  # 7 positions ahead
-    8: 25,  # 8 positions ahead
-    9: 30,  # 9+ positions ahead
+    1: 0,
+    2: 2,
+    3: 4,
+    4: 6,
+    5: 9,
+    6: 12,
+    7: 16,
+    8: 20,
+    9: 25,
+    10: 30,
+    11: 30,
+    12: 30,
+    13: 30,
+    14: 30,
+    15: 30,
+    16: 30,
+    17: 30,
+    18: 30,
+    19: 30,
+    20: 30,
 }
 
 # Default points for beating teammate by position margin
@@ -64,7 +66,6 @@ DEFAULT_CONSTRUCTOR_RACE_POINTS = {i: 62 - (i * 2) for i in range(1, 21)}
 # Validation constants
 MIN_POSITION = 1
 MAX_POSITION = 20
-MAX_SPRINT_POSITION = 8
 MIN_POINTS = 0.0
 MAX_POINTS = 1000.0  # Reasonable upper limit for any single component
 MIN_MULTIPLIER = 1.0
@@ -94,7 +95,7 @@ CONFIG_SCHEMA = {
             "type": "object",
             "patternProperties": {"^[1-8]$": {"type": "number", "minimum": MIN_POINTS}},
             "minProperties": 1,
-            "maxProperties": MAX_SPRINT_POSITION,
+            "maxProperties": MAX_POSITION,
         },
         "improvement_points": {
             "type": "object",
