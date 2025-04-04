@@ -1,6 +1,5 @@
 """Tests for the ScoringCalculator class."""
 
-import numpy as np
 import pytest
 
 from gridrival_ai.probabilities.distributions import (
@@ -145,7 +144,9 @@ class TestScoringCalculator:
         # Create distributions
         qual_dist = PositionDistribution({1: 0.6, 2: 0.4})
         race_dist = PositionDistribution({1: 0.7, 2: 0.3})
-        teammate_dist = PositionDistribution({2: 0.5, 3: 0.5})
+        teammate_dist = PositionDistribution(
+            {1: 0.0, 2: 0.5, 3: 0.5}
+        )  # Added position 1
 
         # Calculate expected points
         points = calculator.expected_driver_points(
@@ -173,8 +174,8 @@ class TestScoringCalculator:
         # Create distributions
         d1_qual = PositionDistribution({1: 0.7, 2: 0.3})
         d1_race = PositionDistribution({1: 0.8, 2: 0.2})
-        d2_qual = PositionDistribution({2: 0.6, 3: 0.4})
-        d2_race = PositionDistribution({2: 0.5, 3: 0.5})
+        d2_qual = PositionDistribution({1: 0.0, 2: 0.6, 3: 0.4})  # Added position 1
+        d2_race = PositionDistribution({1: 0.0, 2: 0.5, 3: 0.5})  # Added position 1
 
         # Calculate expected points
         points = calculator.expected_constructor_points(
@@ -267,41 +268,6 @@ class TestScoringCalculator:
                 qualifying=1, race=1, sprint_finish=9
             )  # Invalid sprint position
 
-    def test_monte_carlo_simulation(self, calculator):
-        """Test Monte Carlo simulation of driver points."""
-        # Create distributions
-        qual_dist = PositionDistribution({1: 0.6, 2: 0.4})
-        race_dist = PositionDistribution({1: 0.7, 2: 0.3})
-        teammate_dist = PositionDistribution({2: 1.0})
-
-        # Run simulations with fixed seed
-        n_samples = 1000
-        simulations = calculator.simulate_driver_points(
-            qual_dist=qual_dist,
-            race_dist=race_dist,
-            rolling_avg=2.0,
-            teammate_dist=teammate_dist,
-            n_samples=n_samples,
-            random_seed=42,
-        )
-
-        # Check array shape
-        assert len(simulations) == n_samples
-
-        # Calculate statistics
-        mean_points = np.mean(simulations)
-
-        # Expected points should be close to simulated mean
-        expected_points = calculator.expected_driver_points(
-            qual_dist=qual_dist,
-            race_dist=race_dist,
-            rolling_avg=2.0,
-            teammate_dist=teammate_dist,
-        ).total
-
-        # Monte Carlo should converge to expected value
-        assert mean_points == pytest.approx(expected_points, rel=0.05)
-
     def test_joint_distribution_overtakes(self, calculator):
         """Test overtake calculation with explicit joint distribution."""
         # Create marginal distributions
@@ -315,9 +281,7 @@ class TestScoringCalculator:
                 (1, 2): 0.1,  # Qualify P1, finish P2
                 (2, 1): 0.2,  # Qualify P2, finish P1
                 (2, 2): 0.2,  # Both P2
-            },
-            outcome1_name="qualifying",
-            outcome2_name="race",
+            }
         )
 
         # Calculate with joint distribution
@@ -325,7 +289,9 @@ class TestScoringCalculator:
             qual_dist=qual_dist,
             race_dist=race_dist,
             rolling_avg=2.0,
-            teammate_dist=PositionDistribution({3: 1.0}),
+            teammate_dist=PositionDistribution(
+                {1: 0.0, 2: 0.0, 3: 1.0}
+            ),  # Added position 1
             joint_qual_race=joint_dist,
         )
 
@@ -337,7 +303,9 @@ class TestScoringCalculator:
             qual_dist=qual_dist,
             race_dist=race_dist,
             rolling_avg=2.0,
-            teammate_dist=PositionDistribution({3: 1.0}),
+            teammate_dist=PositionDistribution(
+                {1: 0.0, 2: 0.0, 3: 1.0}
+            ),  # Added position 1
         )
 
         # Independent overtake points should be different
@@ -372,7 +340,9 @@ class TestScoringCalculator:
                 qual_dist=PositionDistribution({1: 1.0}),
                 race_dist=PositionDistribution({1: 1.0}),
                 rolling_avg=1.0,
-                teammate_dist=PositionDistribution({2: 1.0}),
+                teammate_dist=PositionDistribution(
+                    {1: 0.0, 2: 1.0}
+                ),  # Added position 1
                 completion_prob=prob,
             )
 
@@ -385,22 +355,6 @@ class TestScoringCalculator:
                 assert 6 <= points.completion <= 9
             else:  # prob == 1.0
                 assert points.completion == 12
-
-    def test_sample_position(self, calculator):
-        """Test sampling from position distribution."""
-        dist = PositionDistribution({1: 0.8, 2: 0.2})
-
-        # Test with fixed seed
-        np.random.seed(42)
-        samples = [calculator._sample_position(dist) for _ in range(100)]
-
-        # Count positions
-        pos1_count = samples.count(1)
-        pos2_count = samples.count(2)
-
-        # Should roughly match probabilities
-        assert 70 <= pos1_count <= 90
-        assert 10 <= pos2_count <= 30
 
     def test_driver_points_breakdown(self):
         """Test DriverPointsBreakdown class."""
