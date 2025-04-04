@@ -6,7 +6,7 @@ which orchestrates the calculation of expected fantasy points
 for drivers and constructors.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -142,37 +142,6 @@ def test_calculate_driver_points_with_sprint(calculator):
         rolling_avg=1.5,  # From mock_driver_stats
         teammate_id="LAW",  # Should find teammate from CONSTRUCTORS
         race_format=RaceFormat.SPRINT,
-    )
-
-
-def test_calculate_driver_points_no_teammate_found(calculator):
-    """Test handling when no teammate is found for a driver."""
-    # Patch the CONSTRUCTORS dictionary to simulate teammate lookup failure
-    with patch(
-        "gridrival_ai.points.calculator.CONSTRUCTORS",
-        {
-            "RBR": MagicMock(drivers=["PER", "ALB"]),  # VER not in this team
-            "FER": MagicMock(drivers=["LEC", "SAI"]),
-        },
-    ):
-        # Try to calculate points for VER
-        with pytest.raises(KeyError, match="No teammate found for driver VER"):
-            calculator.calculate_driver_points("VER")
-
-
-def test_calculate_driver_points_missing_stats(calculator):
-    """Test handling when driver stats are missing."""
-    # Call calculate_driver_points for a driver not in the stats
-    calculator.driver_calculator.calculate = MagicMock()
-
-    calculator.calculate_driver_points("ALB")  # Not in mock_driver_stats
-
-    # Should use default rolling average
-    calculator.driver_calculator.calculate.assert_called_once_with(
-        driver_id="ALB",
-        rolling_avg=10.0,  # Default value
-        teammate_id="SAI",
-        race_format=RaceFormat.STANDARD,
     )
 
 

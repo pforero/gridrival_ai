@@ -9,7 +9,7 @@ calculators and handles the integration with team data.
 from types import SimpleNamespace
 from typing import Dict
 
-from gridrival_ai.data.reference import CONSTRUCTORS
+from gridrival_ai.data.reference import get_teammate
 from gridrival_ai.points.constructor import ConstructorPointsCalculator
 from gridrival_ai.points.driver import DriverPointsCalculator
 from gridrival_ai.probabilities.distributions import RaceDistribution
@@ -85,30 +85,10 @@ class PointsCalculator:
         -------
         Dict[str, float]
             Points breakdown by component (qualifying, race, etc.)
-
-        Raises
-        ------
-        KeyError
-            If driver or required distributions not found
         """
-        # Get teammate ID
-        teammate_id = None
-        for constructor in CONSTRUCTORS.values():
-            if driver_id in constructor.drivers:
-                teammate_id = (
-                    constructor.drivers[0]
-                    if constructor.drivers[1] == driver_id
-                    else constructor.drivers[1]
-                )
-                break
-
-        if teammate_id is None:
-            raise KeyError(f"No teammate found for driver {driver_id}")
-
-        # Get rolling average
-        rolling_avg = self.driver_stats.get(
-            driver_id, 10.0
-        )  # Default to mid-field if not found
+        # Get teammate ID and rolling average
+        teammate_id = get_teammate(driver_id)
+        rolling_avg = self.driver_stats[driver_id]
 
         # Calculate points
         return self.driver_calculator.calculate(
