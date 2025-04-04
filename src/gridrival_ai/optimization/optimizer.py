@@ -118,94 +118,57 @@ class TeamOptimizer:
         """
         Find optimal team composition.
 
-        This method evaluates combinations of drivers and constructors to find
-        the team with the highest expected points that satisfies all constraints.
+        This method calculates all valid team combinations within budget and returns
+        an OptimizationResult that can be filtered based on constraints.
 
         Parameters
         ----------
         race_format : RaceFormat, optional
             Format of the race weekend, by default RaceFormat.STANDARD
         locked_in : Optional[Set[str]], optional
-            Set of element IDs that must be included, by default None
+            Elements that must be included in solutions, by default None
         locked_out : Optional[Set[str]], optional
-            Set of element IDs that cannot be included, by default None
+            Elements that must be excluded from solutions, by default None
 
         Returns
         -------
         OptimizationResult
-            Results of the optimization, including best and alternative solutions
+            Results object with all solutions and filtering capabilities
 
         Notes
         -----
-        The optimization uses a brute force approach with pruning to eliminate
-        invalid combinations early. Solutions are considered equal if their expected
-        points differ by less than 1e-6.
+        This method calculates ALL valid solutions within budget, including
+        penalties for not using locked-in drivers.
         """
         # Initialize constraints
         locked_in = locked_in or set()
         locked_out = locked_out or set()
 
-        # Pre-calculate driver scores
-        driver_scores = self._calculate_driver_scores(race_format, locked_out)
+        # Pre-calculate driver scores for ALL drivers
+        driver_scores = self._calculate_driver_scores(race_format)
 
-        # Pre-calculate constructor scores
-        constructor_scores = self._calculate_constructor_scores(race_format, locked_out)
+        # Pre-calculate constructor scores for ALL constructors
+        constructor_scores = self._calculate_constructor_scores()
 
-        # Generate and evaluate team combinations
-        best_solution = None
-        alternative_solutions = []
-        max_points = 0.0
+        # Generate and evaluate all valid team combinations
+        all_solutions = []
 
-        try:
-            for solution in self._generate_valid_combinations(
-                driver_scores, constructor_scores, locked_in, locked_out
-            ):
-                if best_solution is None:
-                    # First valid solution
-                    best_solution = solution
-                    max_points = solution.expected_points
-                    continue
+        # Generate all valid combinations within budget, applying locked-in penalties
+        for solution in self._generate_valid_combinations(
+            driver_scores, constructor_scores, locked_in
+        ):
+            all_solutions.append(solution)
 
-                if np.isclose(
-                    solution.expected_points,
-                    max_points,
-                    rtol=1e-6,
-                ):
-                    # Equal to current best
-                    alternative_solutions.append(solution)
-                elif solution.expected_points > max_points:
-                    # New best solution
-                    best_solution = solution
-                    max_points = solution.expected_points
-                    alternative_solutions = []
-
-            if best_solution is None:
-                return OptimizationResult(
-                    best_solution=None,
-                    alternative_solutions=[],
-                    remaining_budget=self.budget,
-                    error_message="Optimization failed: No valid team found",
-                )
-
-            remaining = self.budget - best_solution.total_cost
-
-            return OptimizationResult(
-                best_solution=best_solution,
-                alternative_solutions=alternative_solutions,
-                remaining_budget=remaining,
-                error_message=None,
-            )
-
-        except Exception as e:
-            return OptimizationResult(
-                best_solution=None,
-                alternative_solutions=[],
-                remaining_budget=self.budget,
-                error_message=f"Optimization failed: {str(e)}",
-            )
+        # Return result with all solutions and requested filters
+        return OptimizationResult(
+            all_solutions=all_solutions,
+            locked_in=locked_in,
+            locked_out=locked_out,
+            budget=self.budget,
+        )
 
     def _calculate_driver_scores(
-        self, race_format: RaceFormat, locked_out: Set[str]
+        self, race_format: RaceFormat
     ) -> Dict[str, DriverScoring]:
         """
         Calculate driver scoring information.
@@ -214,8 +177,6 @@ class TeamOptimizer:
         ----------
         race_format : RaceFormat
             Format of the race weekend
-        locked_out : Set[str]
-            Set of element IDs that cannot be included
 
         Returns
         -------
@@ -224,8 +185,8 @@ class TeamOptimizer:
         """
         driver_scores = {}
 
-        # Get available drivers (not locked out)
-        available_drivers = self.league_data.get_available_drivers() - locked_out
+        # Get all available drivers
+        available_drivers = self.league_data.get_available_drivers()
 
         # Calculate scores for each available driver
         for driver_id in available_drivers:
@@ -256,18 +217,9 @@ class TeamOptimizer:
 
         return driver_scores
 
-    def _calculate_constructor_scores(
-        self, race_format: RaceFormat, locked_out: Set[str]
-    ) -> Dict[str, ConstructorScoring]:
+    def _calculate_constructor_scores(self) -> Dict[str, ConstructorScoring]:
         """
         Calculate constructor scoring information.
-
-        Parameters
-        ----------
-        race_format : RaceFormat
-            Format of the race weekend
-        locked_out : Set[str]
-            Set of element IDs that cannot be included
 
         Returns
         -------
@@ -276,10 +228,8 @@ class TeamOptimizer:
         """
         constructor_scores = {}
 
-        # Get available constructors (not locked out)
-        available_constructors = (
-            self.league_data.get_available_constructors() - locked_out
-        )
+        # Get all available constructors
+        available_constructors = self.league_data.get_available_constructors()
 
         # Calculate scores for each available constructor
         for constructor_id in available_constructors:
@@ -289,7 +239,7 @@ class TeamOptimizer:
             # Calculate expected points using the points calculator
             try:
                 points_dict = self.points_calculator.calculate_constructor_points(
-                    constructor_id=constructor_id, race_format=race_format
+                    constructor_id=constructor_id
                 )
 
                 # Total points across all components
@@ -309,7 +259,6 @@ class TeamOptimizer:
         driver_scores: Dict[str, DriverScoring],
         constructor_scores: Dict[str, ConstructorScoring],
         locked_in: Set[str],
-        locked_out: Set[str],
     ) -> Iterator[TeamSolution]:
         """
         Generate valid team combinations.
@@ -321,22 +270,21 @@ class TeamOptimizer:
         constructor_scores : Dict[str, ConstructorScoring]
             Scoring information for available constructors
         locked_in : Set[str]
-            Set of element IDs that must be included
-        locked_out : Set[str]
-            Set of element IDs that cannot be included
+            Set of element IDs that must be included (for penalty calculation)
 
         Yields
         ------
         TeamSolution
-            Valid team composition
+            Valid team composition within budget
 
         Notes
         -----
         Uses progressive pruning:
         1. Generate driver combinations
-        2. Check budget and constraints
-        3. Select best talent driver
-        4. Add valid constructors
+        2. Apply penalties for locked-in drivers not included
+        3. Check budget constraints
+        4. Select best talent driver
+        5. Add valid constructors
         """
         # Get driver IDs for drivers and constructors
         driver_ids = set(driver_scores.keys())
@@ -346,29 +294,22 @@ class TeamOptimizer:
         locked_in_drivers = locked_in & driver_ids
         locked_in_constructors = locked_in & constructor_ids
 
-        # Must include locked-in drivers
-        required_drivers = locked_in_drivers
-        optional_drivers = driver_ids - required_drivers
-
-        # Need to select (5 - len(required_drivers)) additional drivers
-        remaining_driver_slots = 5 - len(required_drivers)
-
-        if remaining_driver_slots < 0:
-            # Too many locked-in drivers
-            return
-
-        # Calculate penalty for excluded locked-in drivers
-        locked_in_cost = sum(
-            driver_scores[d].salary * LOCKED_IN_PENALTY for d in locked_in_drivers
-        )
-
-        # Try each valid driver combination
-        for extra_drivers in combinations(optional_drivers, remaining_driver_slots):
-            drivers = frozenset(required_drivers | set(extra_drivers))
+        # Try each valid driver combination (always 5 drivers)
+        for five_drivers in combinations(driver_ids, 5):
+            drivers = frozenset(five_drivers)
 
             # Calculate driver cost
             driver_cost = sum(driver_scores[d].salary for d in drivers)
-            base_cost = driver_cost + locked_in_cost
+
+            # Calculate penalty for excluded locked-in drivers
+            missing_locked_drivers = locked_in_drivers - drivers
+            locked_in_penalty = sum(
+                driver_scores[d].salary * LOCKED_IN_PENALTY
+                for d in missing_locked_drivers
+            )
+
+            # Add penalty to base cost
+            base_cost = driver_cost + locked_in_penalty
 
             if base_cost > self.budget:
                 # Skip if over budget before constructor
@@ -378,13 +319,20 @@ class TeamOptimizer:
             remaining_budget = self.budget - base_cost
 
             for const_id, const_score in constructor_scores.items():
-                if const_id in locked_out:
-                    continue
+                # Apply penalty for locked-in constructor if not selected
+                missing_constructor_penalty = 0
+                if const_id not in locked_in_constructors and locked_in_constructors:
+                    # Constructor is locked in but we're using a different one
+                    # Apply penalty for each locked-in constructor
+                    for locked_const in locked_in_constructors:
+                        if locked_const in constructor_scores:
+                            missing_constructor_penalty += (
+                                constructor_scores[locked_const].salary
+                                * LOCKED_IN_PENALTY
+                            )
 
-                if (
-                    const_id not in locked_in_constructors
-                    and const_score.salary > remaining_budget
-                ):
+                # Check if constructor is affordable including penalty
+                if const_score.salary + missing_constructor_penalty > remaining_budget:
                     continue
 
                 # Find best talent driver(s)
@@ -402,7 +350,9 @@ class TeamOptimizer:
                         points_breakdown[driver_id] = driver_points
                         total_points += sum(driver_points.values())
 
-                    total_cost = base_cost + const_score.salary
+                    total_cost = (
+                        base_cost + const_score.salary + missing_constructor_penalty
+                    )
 
                     yield TeamSolution(
                         drivers=drivers,
@@ -450,7 +400,9 @@ class TeamOptimizer:
                             points_breakdown[driver_id] = driver_points
                             total_points += sum(driver_points.values())
 
-                    total_cost = base_cost + const_score.salary
+                    total_cost = (
+                        base_cost + const_score.salary + missing_constructor_penalty
+                    )
 
                     yield TeamSolution(
                         drivers=drivers,

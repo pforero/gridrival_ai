@@ -208,7 +208,7 @@ class TestTeamOptimizer:
         """Test calculation of driver scores."""
         # Call the private method directly
         driver_scores = optimizer._calculate_driver_scores(
-            race_format=RaceFormat.STANDARD, locked_out=set()
+            race_format=RaceFormat.STANDARD
         )
 
         # Check structure and content
@@ -232,9 +232,7 @@ class TestTeamOptimizer:
     def test_calculate_constructor_scores(self, optimizer, sample_league_data):
         """Test calculation of constructor scores."""
         # Call the private method directly
-        constructor_scores = optimizer._calculate_constructor_scores(
-            race_format=RaceFormat.STANDARD, locked_out=set()
-        )
+        constructor_scores = optimizer._calculate_constructor_scores()
 
         # Check structure and content
         assert isinstance(constructor_scores, dict)
@@ -318,23 +316,6 @@ class TestTeamOptimizer:
         # Should be within budget
         assert result.best_solution.total_cost <= 85.0
 
-    def test_impossible_budget(self, optimizer):
-        """Test optimization with impossible budget constraint."""
-        # Create optimizer with extremely low budget
-        impossible_optimizer = TeamOptimizer(
-            league_data=optimizer.league_data,
-            points_calculator=optimizer.points_calculator,
-            race_distribution=optimizer.race_distribution,
-            driver_stats=optimizer.driver_stats,
-            budget=50.0,  # Too low to create a valid team
-        )
-
-        result = impossible_optimizer.optimize(race_format=RaceFormat.STANDARD)
-
-        # Should not find a solution
-        assert result.best_solution is None
-        assert "No valid team found" in result.error_message
-
     def test_locked_in_constructor(self, optimizer):
         """Test optimization with locked-in constructor."""
         # Lock in RBR constructor
@@ -416,18 +397,6 @@ class TestTeamOptimizer:
             best_driver = max(eligible_points, key=eligible_points.get)
             assert talent_driver == best_driver
 
-    def test_too_many_locked_in_drivers(self, optimizer):
-        """Test handling when too many drivers are locked in."""
-        # Lock in 6 drivers (more than allowed)
-        result = optimizer.optimize(
-            race_format=RaceFormat.STANDARD,
-            locked_in={"VER", "HAM", "LEC", "SAI", "NOR", "ANT"},
-        )
-
-        # Should not find a valid solution
-        assert result.best_solution is None
-        assert result.error_message is not None
-
     def test_points_breakdown(self, optimizer):
         """Test points breakdown in solution."""
         result = optimizer.optimize(race_format=RaceFormat.STANDARD)
@@ -454,3 +423,58 @@ class TestTeamOptimizer:
                 for component, value in driver_points.items():
                     if component in base_points:
                         assert value == base_points[component] * 2
+
+    def test_filtered_solutions(self, optimizer):
+        """Test filtered solutions property."""
+        # Create result with all solutions
+        result = optimizer.optimize(race_format=RaceFormat.STANDARD)
+
+        # All solutions should be available
+        assert len(result.all_solutions) > 0
+
+        # Filtered solutions should match constraints
+        filtered = result.filtered_solutions
+        assert len(filtered) > 0
+
+        # Test filtering with new constraints without re-optimization
+        with_ver = result.with_elements({"VER"})
+        assert "VER" in with_ver.locked_in
+        assert all(
+            "VER" in solution.drivers for solution in with_ver.filtered_solutions
+        )
+
+        # Test filtering to exclude elements
+        without_rbr = result.without_elements({"RBR"})
+        assert "RBR" in without_rbr.locked_out
+        assert all(
+            solution.constructor != "RBR" for solution in without_rbr.filtered_solutions
+        )
+
+        # Test removing all restrictions
+        unrestricted = result.without_restrictions()
+        assert len(unrestricted.locked_in) == 0
+        assert len(unrestricted.locked_out) == 0
+
+    def test_top_n_solutions(self, optimizer):
+        """Test getting top N solutions."""
+        result = optimizer.optimize(race_format=RaceFormat.STANDARD)
+
+        # Get top 5 solutions
+        top_5 = result.top_n(5)
+
+        # Should return exactly 5 solutions if available
+        assert len(top_5) <= 5
+
+        # Solutions should be sorted by expected points (highest first)
+        for i in range(len(top_5) - 1):
+            assert top_5[i].expected_points >= top_5[i + 1].expected_points
+
+    def test_remaining_budget(self, optimizer):
+        """Test remaining budget calculation."""
+        result = optimizer.optimize(race_format=RaceFormat.STANDARD)
+
+        # Calculate expected remaining budget
+        expected_remaining = optimizer.budget - result.best_solution.total_cost
+
+        # Should match the property value
+        assert result.remaining_budget == expected_remaining
