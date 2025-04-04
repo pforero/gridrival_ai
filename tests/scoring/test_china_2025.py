@@ -1,9 +1,8 @@
-"""Tests for the ScoringCalculator with China 2024 race results."""
+"""Tests for the ScoringCalculator with China 2025 race results."""
 
 import pytest
 
 from gridrival_ai.scoring.calculator import ScoringCalculator
-from gridrival_ai.scoring.types import RaceFormat
 
 
 @pytest.fixture
@@ -194,7 +193,7 @@ def test_driver_total_points(calculator, driver_data, mock_teams):
             teammate_pos=driver_data[teammate]["race_pos"],
             completion_pct=data["completion_pct"],
             sprint_pos=data["sprint_pos"],
-            race_format=RaceFormat.SPRINT,
+            race_format="SPRINT",
         )
         driver_points[driver] = points.total
 
@@ -236,7 +235,6 @@ def test_constructor_total_points(calculator, driver_data, mock_teams):
             driver1_race=driver_data[drivers[0]]["race_pos"],
             driver2_qualifying=driver_data[drivers[1]]["qualifying_pos"],
             driver2_race=driver_data[drivers[1]]["race_pos"],
-            race_format=RaceFormat.SPRINT,
         )
         constructor_points[constructor] = sum(points.values())
 

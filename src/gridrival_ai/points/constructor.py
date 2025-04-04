@@ -11,7 +11,6 @@ from gridrival_ai.data.reference import CONSTRUCTORS
 from gridrival_ai.points.components import PositionPointsCalculator
 from gridrival_ai.probabilities.distributions import RaceDistribution
 from gridrival_ai.scoring.calculator import ScoringCalculator
-from gridrival_ai.scoring.types import RaceFormat
 
 
 class ConstructorPointsCalculator:
@@ -43,9 +42,7 @@ class ConstructorPointsCalculator:
         self.scorer = scorer
         self.position_calculator = PositionPointsCalculator()
 
-    def calculate(
-        self, constructor_id: str, race_format: RaceFormat = RaceFormat.STANDARD
-    ) -> Dict[str, float]:
+    def calculate(self, constructor_id: str) -> Dict[str, float]:
         """
         Calculate expected points breakdown for a constructor.
 
@@ -53,8 +50,6 @@ class ConstructorPointsCalculator:
         ----------
         constructor_id : str
             Constructor ID
-        race_format : RaceFormat, optional
-            Type of race weekend, by default RaceFormat.STANDARD
 
         Returns
         -------

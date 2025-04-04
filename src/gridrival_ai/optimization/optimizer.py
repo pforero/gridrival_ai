@@ -7,20 +7,21 @@ with progressive pruning for efficiency.
 """
 
 from itertools import combinations
-from typing import Dict, Iterator, Optional, Set
+from typing import Dict, Iterator, Set
 
 import numpy as np
 
 from gridrival_ai.data.fantasy import FantasyLeagueData
+from gridrival_ai.data.reference import CONSTRUCTORS, get_teammate
 from gridrival_ai.optimization.types import (
     ConstructorScoring,
     DriverScoring,
     OptimizationResult,
     TeamSolution,
 )
-from gridrival_ai.points.calculator import PointsCalculator
 from gridrival_ai.probabilities.distributions import RaceDistribution
-from gridrival_ai.scoring.types import RaceFormat
+from gridrival_ai.scoring.calculator import ScoringCalculator
+from gridrival_ai.scoring.constants import RaceFormat
 
 # Constants
 TALENT_SALARY_THRESHOLD = 18.0  # Maximum salary for talent drivers
@@ -39,7 +40,7 @@ class TeamOptimizer:
     ----------
     league_data : FantasyLeagueData
         Current league state including salaries and constraints
-    points_calculator : PointsCalculator
+    scorer : ScoringCalculator
         Calculator for expected points using the new points API
     race_distribution : RaceDistribution
         Distribution containing probabilities for all sessions and drivers
@@ -60,7 +61,7 @@ class TeamOptimizer:
     Examples
     --------
     >>> from gridrival_ai.data.fantasy import FantasyLeagueData
-    >>> from gridrival_ai.points.calculator import PointsCalculator
+    >>> from gridrival_ai.scoring.calculator import ScoringCalculator
     >>> from gridrival_ai.probabilities.distributions import RaceDistribution
     >>>
     >>> # Create prerequisites
@@ -74,19 +75,19 @@ class TeamOptimizer:
     >>> odds_data = {...}  # Dictionary of betting odds
     >>> race_dist = RaceDistribution.from_structured_odds(odds_data)
     >>>
-    >>> # Create points calculator
-    >>> points_calculator = PointsCalculator(scorer, race_dist, driver_stats)
+    >>> # Create scoring calculator
+    >>> scorer = ScoringCalculator()
     >>>
     >>> # Create optimizer
     >>> optimizer = TeamOptimizer(
     ...     league_data=league_data,
-    ...     points_calculator=points_calculator,
+    ...     scorer=scorer,
     ...     race_distribution=race_dist,
     ...     driver_stats=driver_stats
     ... )
     >>>
     >>> # Optimize team
-    >>> result = optimizer.optimize(race_format=RaceFormat.STANDARD)
+    >>> result = optimizer.optimize(race_format="STANDARD")
     >>>
     >>> # Access best team
     >>> if result.best_solution:
@@ -97,23 +98,23 @@ class TeamOptimizer:
     def __init__(
         self,
         league_data: FantasyLeagueData,
-        points_calculator: PointsCalculator,
+        scorer: ScoringCalculator,
         race_distribution: RaceDistribution,
         driver_stats: Dict[str, float],
         budget: float = 100.0,
     ) -> None:
         """Initialize optimizer with league state."""
         self.league_data = league_data
-        self.points_calculator = points_calculator
+        self.scorer = scorer
         self.race_distribution = race_distribution
         self.driver_stats = driver_stats
         self.budget = budget
 
     def optimize(
         self,
-        race_format: RaceFormat = RaceFormat.STANDARD,
-        locked_in: Optional[Set[str]] = None,
-        locked_out: Optional[Set[str]] = None,
+        race_format: RaceFormat = "STANDARD",
+        locked_in: set[str] | None = None,
+        locked_out: set[str] | None = None,
     ) -> OptimizationResult:
         """
         Find optimal team composition.
@@ -124,11 +125,11 @@ class TeamOptimizer:
         Parameters
         ----------
         race_format : RaceFormat, optional
-            Format of the race weekend, by default RaceFormat.STANDARD
-        locked_in : Optional[Set[str]], optional
-            Elements that must be included in solutions, by default None
-        locked_out : Optional[Set[str]], optional
-            Elements that must be excluded from solutions, by default None
+            Format of the race weekend, by default "STANDARD"
+        locked_in : set[str] | None, optional
+            Set of driver IDs that must be included, by default None
+        locked_out : set[str] | None, optional
+            Set of driver IDs that must be excluded, by default None
 
         Returns
         -------
@@ -200,16 +201,33 @@ class TeamOptimizer:
             salary = self.league_data.salaries.drivers[driver_id]
             can_be_talent = salary <= TALENT_SALARY_THRESHOLD
 
-            # Calculate expected points using the points calculator
-            points_dict = self.points_calculator.calculate_driver_points(
-                driver_id=driver_id, race_format=race_format
+            # Get teammate ID using the reference function
+            teammate_id = get_teammate(driver_id)
+
+            # Calculate expected points using the scoring calculator
+            points_breakdown = (
+                self.scorer.expected_driver_points_from_race_distribution(
+                    race_dist=self.race_distribution,
+                    driver_id=driver_id,
+                    rolling_avg=self.driver_stats[driver_id],
+                    teammate_id=teammate_id,
+                    race_format=race_format,
+                )
             )
 
-            # Total points across all components
-            regular_points = sum(points_dict.values())
+            # Convert points breakdown to dictionary for compatibility
+            points_dict = {
+                "qualifying": points_breakdown.qualifying,
+                "race": points_breakdown.race,
+                "sprint": points_breakdown.sprint,
+                "overtake": points_breakdown.overtake,
+                "improvement": points_breakdown.improvement,
+                "teammate": points_breakdown.teammate,
+                "completion": points_breakdown.completion,
+            }
 
             driver_scores[driver_id] = DriverScoring(
-                regular_points=regular_points,
+                regular_points=points_breakdown.total,
                 points_dict=points_dict,
                 salary=salary,
                 can_be_talent=can_be_talent,
@@ -219,7 +237,7 @@ class TeamOptimizer:
 
     def _calculate_constructor_scores(self) -> Dict[str, ConstructorScoring]:
         """
-        Calculate constructor scoring information.
+        Calculate constructor scoring information based on driver distributions.
 
         Returns
         -------
@@ -233,24 +251,49 @@ class TeamOptimizer:
 
         # Calculate scores for each available constructor
         for constructor_id in available_constructors:
+            # Get constructor from reference data
+            constructor = CONSTRUCTORS.get(constructor_id)
+            if not constructor or len(constructor.drivers) < 2:
+                continue
+
             # Get constructor salary
             salary = self.league_data.salaries.constructors[constructor_id]
 
-            # Calculate expected points using the points calculator
+            # Get the two drivers
+            driver1_id, driver2_id = constructor.drivers
+
+            # Get qualifying and race distributions for each driver
             try:
-                points_dict = self.points_calculator.calculate_constructor_points(
-                    constructor_id=constructor_id
+                driver1_qual_dist = self.race_distribution.get_driver_distribution(
+                    driver1_id, "qualifying"
                 )
-
-                # Total points across all components
-                total_points = sum(points_dict.values())
-
-                constructor_scores[constructor_id] = ConstructorScoring(
-                    points=total_points, points_dict=points_dict, salary=salary
+                driver1_race_dist = self.race_distribution.get_driver_distribution(
+                    driver1_id, "race"
                 )
-            except Exception:
-                # Skip constructors that can't be scored
+                driver2_qual_dist = self.race_distribution.get_driver_distribution(
+                    driver2_id, "qualifying"
+                )
+                driver2_race_dist = self.race_distribution.get_driver_distribution(
+                    driver2_id, "race"
+                )
+            except KeyError:
+                # Skip if we're missing distributions
                 continue
+
+            # Calculate expected constructor points
+            points_dict = self.scorer.expected_constructor_points(
+                driver1_qual_dist=driver1_qual_dist,
+                driver1_race_dist=driver1_race_dist,
+                driver2_qual_dist=driver2_qual_dist,
+                driver2_race_dist=driver2_race_dist,
+            )
+
+            # Sum up the points
+            total_points = sum(points_dict.values())
+
+            constructor_scores[constructor_id] = ConstructorScoring(
+                points=total_points, points_dict=points_dict, salary=salary
+            )
 
         return constructor_scores
 

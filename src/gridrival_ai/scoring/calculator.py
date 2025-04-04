@@ -1,56 +1,68 @@
 """
-High-level calculator for F1 fantasy points.
+Simplified calculator for F1 fantasy points.
 
-This module provides a user-friendly interface for calculating F1 fantasy points
-based on driver and constructor performance. It offers direct methods for common
-scoring scenarios and integrates with probability distributions for expected
-point calculations.
+This module provides a streamlined calculator for F1 fantasy points without
+complex validation, configuration loading, or unnecessary abstractions.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from types import SimpleNamespace
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 from gridrival_ai.probabilities.distributions import (
     JointDistribution,
     PositionDistribution,
     RaceDistribution,
 )
-from gridrival_ai.scoring.config import ScoringConfig
-from gridrival_ai.scoring.engine import ScoringEngine
-from gridrival_ai.scoring.types import (
-    ConstructorPositions,
-    ConstructorWeekendData,
-    DriverPointsBreakdown,
-    DriverPositions,
-    DriverWeekendData,
+from gridrival_ai.scoring.constants import (
+    COMPLETION_STAGE_POINTS,
+    COMPLETION_THRESHOLDS,
+    CONSTRUCTOR_QUALIFYING_POINTS,
+    CONSTRUCTOR_RACE_POINTS,
+    IMPROVEMENT_POINTS,
+    OVERTAKE_MULTIPLIER,
+    QUALIFYING_POINTS,
+    RACE_POINTS,
+    SPRINT_POINTS,
+    TEAMMATE_POINTS,
     RaceFormat,
 )
 
 
 @dataclass
+class DriverPointsBreakdown:
+    """Detailed breakdown of driver points by component."""
+
+    qualifying: float = 0.0
+    race: float = 0.0
+    sprint: float = 0.0
+    overtake: float = 0.0
+    improvement: float = 0.0
+    teammate: float = 0.0
+    completion: float = 0.0
+
+    @property
+    def total(self) -> float:
+        """Calculate total points across all components."""
+        return (
+            self.qualifying
+            + self.race
+            + self.sprint
+            + self.overtake
+            + self.improvement
+            + self.teammate
+            + self.completion
+        )
+
+
 class ScoringCalculator:
     """
-    User-friendly calculator for F1 fantasy points.
+    Simplified calculator for F1 fantasy points.
 
-    This class provides an intuitive interface for calculating fantasy points
-    for drivers and constructors under various race scenarios. It supports both
-    direct calculations with specific positions and expected value calculations
-    with probability distributions.
-
-    Parameters
-    ----------
-    config : ScoringConfig, optional
-        Configuration for scoring rules, by default None (uses default config).
-
-    Attributes
-    ----------
-    config : ScoringConfig
-        Scoring configuration used for calculations.
-    engine : ScoringEngine
-        Low-level calculation engine for optimized computations.
+    This class provides methods for calculating fantasy points for drivers
+    and constructors based on race results and expected points based on
+    probability distributions.
 
     Examples
     --------
@@ -65,31 +77,7 @@ class ScoringCalculator:
     ... )
     >>> print(f"Total points: {points.total}")
     Total points: 166.0
-
-    >>> # Calculate with probability distributions
-    >>> from gridrival_ai.probabilities.distributions import PositionDistribution
-    >>> qual_dist = PositionDistribution({1: 0.6, 2: 0.4})
-    >>> race_dist = PositionDistribution({1: 0.7, 2: 0.3})
-    >>> expected = calculator.expected_driver_points(
-    ...     qual_dist=qual_dist,
-    ...     race_dist=race_dist,
-    ...     rolling_avg=2.5,
-    ...     teammate_dist=PositionDistribution({3: 1.0})
-    ... )
-    >>> print(f"Expected points: {expected.total}")
-    Expected points: 164.2
     """
-
-    config: ScoringConfig = None
-    engine: ScoringEngine = None
-
-    def __post_init__(self) -> None:
-        """Initialize with default config if none provided and set up engine."""
-        if self.config is None:
-            self.config = ScoringConfig.default()
-
-        if self.engine is None:
-            self.engine = ScoringEngine(self.config)
 
     def calculate_driver_points(
         self,
@@ -99,7 +87,7 @@ class ScoringCalculator:
         teammate_pos: int,
         completion_pct: float = 1.0,
         sprint_pos: Optional[int] = None,
-        race_format: RaceFormat = RaceFormat.STANDARD,
+        race_format: RaceFormat = "STANDARD",
     ) -> DriverPointsBreakdown:
         """
         Calculate points for a driver with given positions.
@@ -118,52 +106,61 @@ class ScoringCalculator:
             Race completion percentage (0.0 to 1.0), by default 1.0
         sprint_pos : Optional[int], optional
             Sprint race position (1-8) for sprint weekends, by default None
-        race_format : RaceFormat, optional
-            Race weekend format, by default RaceFormat.STANDARD
+        race_format : STANDARD or SPRINT, optional
+            Race weekend format, by default STANDARD
 
         Returns
         -------
         DriverPointsBreakdown
             Detailed breakdown of points by component
-
-        Examples
-        --------
-        >>> calculator = ScoringCalculator()
-        >>> points = calculator.calculate_driver_points(
-        ...     qualifying_pos=1,
-        ...     race_pos=2,
-        ...     rolling_avg=4.0,
-        ...     teammate_pos=5,
-        ...     completion_pct=1.0,
-        ...     race_format=RaceFormat.STANDARD
-        ... )
-        >>> points.total
-        162.0
-        >>> points.qualifying
-        50.0
-        >>> points.race
-        97.0
         """
-        # Create DriverWeekendData with positions
-        positions = DriverPositions(
-            qualifying=qualifying_pos,
-            race=race_pos,
-            sprint_finish=sprint_pos,
-        )
+        # Initialize results
+        breakdown = DriverPointsBreakdown()
 
-        data = DriverWeekendData(
-            format=race_format,
-            positions=positions,
-            completion_percentage=completion_pct,
-            rolling_average=rolling_avg,
-            teammate_position=teammate_pos,
-        )
+        # Qualifying points
+        breakdown.qualifying = QUALIFYING_POINTS.get(qualifying_pos, 0.0)
 
-        # Use engine to calculate points
-        points_dict = self._calculate_driver_components(data)
+        # Race points
+        breakdown.race = RACE_POINTS.get(race_pos, 0.0)
 
-        # Convert to breakdown object
-        return self._create_driver_breakdown(points_dict)
+        # Sprint points if applicable
+        if race_format == "SPRINT" and sprint_pos is not None:
+            breakdown.sprint = SPRINT_POINTS.get(sprint_pos, 0.0)
+
+        # Overtake points
+        positions_gained = max(0, qualifying_pos - race_pos)
+        breakdown.overtake = positions_gained * OVERTAKE_MULTIPLIER
+
+        # Improvement points
+        positions_ahead = max(0, round(rolling_avg) - race_pos)
+        if positions_ahead > 0:
+            breakdown.improvement = IMPROVEMENT_POINTS.get(
+                positions_ahead,
+                IMPROVEMENT_POINTS.get(max(IMPROVEMENT_POINTS.keys()), 0.0),
+            )
+
+        # Teammate points
+        if race_pos < teammate_pos:
+            margin = teammate_pos - race_pos
+            # Find applicable threshold
+            thresholds = sorted(TEAMMATE_POINTS.items())
+            for threshold, points in thresholds:
+                if margin <= threshold:
+                    breakdown.teammate = points
+                    break
+            else:
+                # If beyond all thresholds, use the last one
+                if thresholds:
+                    breakdown.teammate = thresholds[-1][1]
+
+        # Completion points
+        stages_completed = 0
+        for threshold in sorted(COMPLETION_THRESHOLDS):
+            if completion_pct >= threshold:
+                stages_completed += 1
+        breakdown.completion = stages_completed * COMPLETION_STAGE_POINTS
+
+        return breakdown
 
     def calculate_constructor_points(
         self,
@@ -171,7 +168,6 @@ class ScoringCalculator:
         driver1_race: int,
         driver2_qualifying: int,
         driver2_race: int,
-        race_format: RaceFormat = RaceFormat.STANDARD,
     ) -> Dict[str, float]:
         """
         Calculate points for a constructor with given positions.
@@ -186,45 +182,31 @@ class ScoringCalculator:
             Second driver qualifying position (1-20)
         driver2_race : int
             Second driver race position (1-20)
-        race_format : RaceFormat, optional
-            Type of race weekend, by default RaceFormat.STANDARD
 
         Returns
         -------
         Dict[str, float]
             Points breakdown by component
-
-        Examples
-        --------
-        >>> calculator = ScoringCalculator()
-        >>> points = calculator.calculate_constructor_points(
-        ...     driver1_qualifying=1,
-        ...     driver1_race=1,
-        ...     driver2_qualifying=4,
-        ...     driver2_race=3
-        ... )
-        >>> points["qualifying"]
-        57.0
-        >>> points["race"]
-        157.0
-        >>> sum(points.values())
-        214.0
         """
-        # Create ConstructorWeekendData with positions
-        positions = ConstructorPositions(
-            driver1_qualifying=driver1_qualifying,
-            driver1_race=driver1_race,
-            driver2_qualifying=driver2_qualifying,
-            driver2_race=driver2_race,
+        # Initialize results
+        result = {
+            "qualifying": 0.0,
+            "race": 0.0,
+        }
+
+        # Qualifying points (sum of both drivers)
+        result["qualifying"] += CONSTRUCTOR_QUALIFYING_POINTS.get(
+            driver1_qualifying, 0.0
+        )
+        result["qualifying"] += CONSTRUCTOR_QUALIFYING_POINTS.get(
+            driver2_qualifying, 0.0
         )
 
-        data = ConstructorWeekendData(
-            format=race_format,
-            positions=positions,
-        )
+        # Race points (sum of both drivers)
+        result["race"] += CONSTRUCTOR_RACE_POINTS.get(driver1_race, 0.0)
+        result["race"] += CONSTRUCTOR_RACE_POINTS.get(driver2_race, 0.0)
 
-        # Use engine to calculate points
-        return self._calculate_constructor_components(data)
+        return result
 
     def expected_driver_points(
         self,
@@ -234,7 +216,7 @@ class ScoringCalculator:
         teammate_dist: PositionDistribution,
         completion_prob: float = 0.95,
         sprint_dist: Optional[PositionDistribution] = None,
-        race_format: RaceFormat = RaceFormat.STANDARD,
+        race_format: RaceFormat = "STANDARD",
         joint_qual_race: Optional[JointDistribution] = None,
     ) -> DriverPointsBreakdown:
         """
@@ -254,8 +236,8 @@ class ScoringCalculator:
             Probability of completing the race, by default 0.95
         sprint_dist : Optional[PositionDistribution], optional
             Distribution over sprint positions, by default None
-        race_format : RaceFormat, optional
-            Race weekend format, by default RaceFormat.STANDARD
+        race_format : STANDARD or SPRINT, optional
+            Race weekend format, by default STANDARD
         joint_qual_race : Optional[JointDistribution], optional
             Joint distribution between qualifying and race positions.
             If provided, this will be used for overtake points calculations.
@@ -265,156 +247,40 @@ class ScoringCalculator:
         -------
         DriverPointsBreakdown
             Detailed breakdown of expected points by component
-
-        Examples
-        --------
-        >>> from gridrival_ai.probabilities.distributions import PositionDistribution
-        >>> calculator = ScoringCalculator()
-        >>> # Create position distributions
-        >>> qual_dist = PositionDistribution({1: 0.7, 2: 0.3})
-        >>> race_dist = PositionDistribution({1: 0.6, 2: 0.4})
-        >>> teammate_dist = PositionDistribution({3: 0.8, 4: 0.2})
-        >>> # Calculate expected points
-        >>> points = calculator.expected_driver_points(
-        ...     qual_dist=qual_dist,
-        ...     race_dist=race_dist,
-        ...     rolling_avg=3.0,
-        ...     teammate_dist=teammate_dist
-        ... )
-        >>> points.total  # Expected total points
-        164.5
         """
         # Initialize component points
-        points = {}
+        result = DriverPointsBreakdown()
 
         # Calculate qualifying points
-        points["qualifying"] = qual_dist.expected_value(self.config.qualifying_points)
+        result.qualifying = self._expected_position_points(qual_dist, QUALIFYING_POINTS)
 
         # Calculate race points
-        points["race"] = race_dist.expected_value(self.config.race_points)
+        result.race = self._expected_position_points(race_dist, RACE_POINTS)
 
         # Calculate sprint points if applicable
-        if race_format == RaceFormat.SPRINT and sprint_dist:
-            points["sprint"] = sprint_dist.expected_value(self.config.sprint_points)
-        else:
-            points["sprint"] = 0.0
+        if race_format == "SPRINT" and sprint_dist:
+            result.sprint = self._expected_position_points(sprint_dist, SPRINT_POINTS)
 
         # Calculate overtake points
         if joint_qual_race:
             # Use joint distribution for overtakes if provided
-            points["overtake"] = self._expected_overtake_points(joint_qual_race)
+            result.overtake = self._expected_overtake_points(joint_qual_race)
         else:
             # Otherwise create independent joint distribution
-            points["overtake"] = self._expected_overtake_points_from_marginals(
+            result.overtake = self._expected_overtake_points_from_marginals(
                 qual_dist, race_dist
             )
 
         # Calculate improvement points
-        points["improvement"] = self._expected_improvement_points(
-            race_dist, rolling_avg
-        )
+        result.improvement = self._expected_improvement_points(race_dist, rolling_avg)
 
         # Calculate teammate points
-        points["teammate"] = self._expected_teammate_points(race_dist, teammate_dist)
+        result.teammate = self._expected_teammate_points(race_dist, teammate_dist)
 
         # Calculate completion points
-        points["completion"] = self._expected_completion_points(completion_prob)
+        result.completion = self._expected_completion_points(completion_prob)
 
-        # Create breakdown object
-        return self._create_driver_breakdown(points)
-
-    def expected_driver_points_from_race_distribution(
-        self,
-        race_dist: RaceDistribution,
-        driver_id: str,
-        rolling_avg: float,
-        teammate_id: str,
-        race_format: RaceFormat = RaceFormat.STANDARD,
-        completion_prob: float = 0.95,  # Fallback if not in race_dist
-    ) -> DriverPointsBreakdown:
-        """
-        Calculate expected points breakdown from a race distribution.
-
-        This method leverages the RaceDistribution class to simplify calculations
-        and provide more integrated functionality.
-
-        Parameters
-        ----------
-        race_dist : RaceDistribution
-            Distribution for all sessions in the race weekend
-        driver_id : str
-            Driver ID
-        rolling_avg : float
-            8-race rolling average finish position
-        teammate_id : str
-            ID of teammate driver
-        race_format : RaceFormat, optional
-            Race weekend format, by default RaceFormat.STANDARD
-        completion_prob : float, optional
-            Fallback completion probability if not found in race_dist, by default 0.95
-
-        Returns
-        -------
-        DriverPointsBreakdown
-            Detailed breakdown of expected points by component
-        """
-        # Initialize component points
-        points = {}
-
-        # Get distributions
-        qual_dist = race_dist.get_driver_distribution(driver_id, "qualifying")
-        race_dist_driver = race_dist.get_driver_distribution(driver_id, "race")
-
-        # Calculate qualifying points
-        points["qualifying"] = qual_dist.expected_value(self.config.qualifying_points)
-
-        # Calculate race points
-        points["race"] = race_dist_driver.expected_value(self.config.race_points)
-
-        # Calculate sprint points if applicable
-        if race_format == RaceFormat.SPRINT:
-            try:
-                sprint_dist = race_dist.get_driver_distribution(driver_id, "sprint")
-                points["sprint"] = sprint_dist.expected_value(self.config.sprint_points)
-            except (KeyError, ValueError):
-                # No sprint distribution, use race as fallback
-                points["sprint"] = race_dist_driver.expected_value(
-                    self.config.sprint_points
-                )
-        else:
-            points["sprint"] = 0.0
-
-        # Calculate overtake points
-        joint_qual_race = race_dist.get_qualifying_race_distribution(driver_id)
-        points["overtake"] = self._expected_overtake_points(joint_qual_race)
-
-        # Calculate improvement points
-        points["improvement"] = self._expected_improvement_points(
-            race_dist_driver, rolling_avg
-        )
-
-        # Calculate teammate points
-        try:
-            session = race_dist.get_session("race")
-            joint_driver_teammate = session.get_joint_distribution(
-                driver_id, teammate_id
-            )
-            points["teammate"] = self._expected_teammate_points(joint_driver_teammate)
-        except (KeyError, ValueError):
-            # If joint distribution not available, use 0 points
-            points["teammate"] = 0.0
-
-        # Calculate completion points
-        try:
-            completion_prob_value = race_dist.get_completion_probability(driver_id)
-        except KeyError:
-            # Use provided completion probability if not found in RaceDistribution
-            completion_prob_value = completion_prob
-
-        points["completion"] = self._expected_completion_points(completion_prob_value)
-
-        # Create breakdown object
-        return self._create_driver_breakdown(points)
+        return result
 
     def expected_constructor_points(
         self,
@@ -422,7 +288,6 @@ class ScoringCalculator:
         driver1_race_dist: PositionDistribution,
         driver2_qual_dist: PositionDistribution,
         driver2_race_dist: PositionDistribution,
-        race_format: RaceFormat = RaceFormat.STANDARD,
     ) -> Dict[str, float]:
         """
         Calculate expected constructor points from probability distributions.
@@ -437,450 +302,143 @@ class ScoringCalculator:
             Second driver's qualifying position distribution
         driver2_race_dist : PositionDistribution
             Second driver's race position distribution
-        race_format : RaceFormat, optional
-            Race weekend format, by default RaceFormat.STANDARD
 
         Returns
         -------
         Dict[str, float]
             Expected points breakdown by component
-
-        Examples
-        --------
-        >>> from gridrival_ai.probabilities.distributions import PositionDistribution
-        >>> calculator = ScoringCalculator()
-        >>> # Create position distributions
-        >>> driver1_qual = PositionDistribution({1: 0.7, 2: 0.3})
-        >>> driver1_race = PositionDistribution({1: 0.6, 2: 0.4})
-        >>> driver2_qual = PositionDistribution({3: 0.6, 4: 0.4})
-        >>> driver2_race = PositionDistribution({3: 0.5, 4: 0.5})
-        >>> # Calculate expected constructor points
-        >>> points = calculator.expected_constructor_points(
-        ...     driver1_qual_dist=driver1_qual,
-        ...     driver1_race_dist=driver1_race,
-        ...     driver2_qual_dist=driver2_qual,
-        ...     driver2_race_dist=driver2_race
-        ... )
-        >>> points["qualifying"]  # Expected qualifying points
-        56.8
-        >>> points["race"]  # Expected race points
-        152.6
         """
         # Initialize components
         result = {"qualifying": 0.0, "race": 0.0}
 
         # Calculate qualifying points for both drivers
-        result["qualifying"] += driver1_qual_dist.expected_value(
-            self.config.constructor_qualifying_points
+        result["qualifying"] += self._expected_position_points(
+            driver1_qual_dist, CONSTRUCTOR_QUALIFYING_POINTS
         )
-        result["qualifying"] += driver2_qual_dist.expected_value(
-            self.config.constructor_qualifying_points
+        result["qualifying"] += self._expected_position_points(
+            driver2_qual_dist, CONSTRUCTOR_QUALIFYING_POINTS
         )
 
         # Calculate race points for both drivers
-        result["race"] += driver1_race_dist.expected_value(
-            self.config.constructor_race_points
+        result["race"] += self._expected_position_points(
+            driver1_race_dist, CONSTRUCTOR_RACE_POINTS
         )
-        result["race"] += driver2_race_dist.expected_value(
-            self.config.constructor_race_points
+        result["race"] += self._expected_position_points(
+            driver2_race_dist, CONSTRUCTOR_RACE_POINTS
         )
 
         return result
 
-    def expected_constructor_points_from_race_distribution(
+    def expected_driver_points_from_race_distribution(
         self,
         race_dist: RaceDistribution,
-        constructor_id: str,
-        driver_ids: Tuple[str, str],
-        race_format: RaceFormat = RaceFormat.STANDARD,
-    ) -> Dict[str, float]:
+        driver_id: str,
+        rolling_avg: float,
+        teammate_id: str,
+        race_format: RaceFormat = "STANDARD",
+        completion_prob: float = 0.95,  # Fallback if not in race_dist
+    ) -> DriverPointsBreakdown:
         """
-        Calculate expected constructor points from a race distribution.
-
-        This method leverages the RaceDistribution class to simplify calculations
-        for constructor points.
+        Calculate expected points breakdown from a race distribution.
 
         Parameters
         ----------
         race_dist : RaceDistribution
             Distribution for all sessions in the race weekend
-        constructor_id : str
-            Constructor ID
-        driver_ids : Tuple[str, str]
-            Tuple of driver IDs for this constructor
-        race_format : RaceFormat, optional
-            Race weekend format, by default RaceFormat.STANDARD
-
-        Returns
-        -------
-        Dict[str, float]
-            Expected points breakdown by component
-        """
-        # Initialize components
-        result = {"qualifying": 0.0, "race": 0.0}
-
-        # Get all driver distributions
-        for driver_id in driver_ids:
-            try:
-                # Get qualifying distribution
-                qual_dist = race_dist.get_driver_distribution(driver_id, "qualifying")
-                result["qualifying"] += qual_dist.expected_value(
-                    self.config.constructor_qualifying_points
-                )
-
-                # Get race distribution
-                race_dist_driver = race_dist.get_driver_distribution(driver_id, "race")
-                result["race"] += race_dist_driver.expected_value(
-                    self.config.constructor_race_points
-                )
-            except KeyError:
-                # Skip if driver not found
-                continue
-
-        return result
-
-    def calculate_qualifying_points(self, position: int) -> float:
-        """
-        Calculate qualifying points for position.
-
-        Parameters
-        ----------
-        position : int
-            Qualifying position (1-20)
-
-        Returns
-        -------
-        float
-            Points for the position
-
-        Examples
-        --------
-        >>> calculator = ScoringCalculator()
-        >>> calculator.calculate_qualifying_points(1)
-        50.0
-        >>> calculator.calculate_qualifying_points(10)
-        32.0
-        """
-        return self.config.qualifying_points.get(position, 0.0)
-
-    def calculate_race_points(self, position: int) -> float:
-        """
-        Calculate race points for position.
-
-        Parameters
-        ----------
-        position : int
-            Race position (1-20)
-
-        Returns
-        -------
-        float
-            Points for the position
-
-        Examples
-        --------
-        >>> calculator = ScoringCalculator()
-        >>> calculator.calculate_race_points(1)
-        100.0
-        >>> calculator.calculate_race_points(10)
-        73.0
-        """
-        return self.config.race_points.get(position, 0.0)
-
-    def calculate_sprint_points(self, position: int) -> float:
-        """
-        Calculate sprint points for position.
-
-        Parameters
-        ----------
-        position : int
-            Sprint position (1-8)
-
-        Returns
-        -------
-        float
-            Points for the position (0.0 if position > 8)
-
-        Examples
-        --------
-        >>> calculator = ScoringCalculator()
-        >>> calculator.calculate_sprint_points(1)
-        8.0
-        >>> calculator.calculate_sprint_points(9)  # No points beyond P8
-        0.0
-        """
-        return self.config.sprint_points.get(position, 0.0)
-
-    def calculate_overtake_points(self, qualifying_pos: int, race_pos: int) -> float:
-        """
-        Calculate overtake points.
-
-        Parameters
-        ----------
-        qualifying_pos : int
-            Qualifying position (1-20)
-        race_pos : int
-            Race position (1-20)
-
-        Returns
-        -------
-        float
-            Overtake points (0.0 if no positions gained)
-
-        Examples
-        --------
-        >>> calculator = ScoringCalculator()
-        >>> calculator.calculate_overtake_points(10, 5)  # Gained 5 positions
-        15.0
-        >>> calculator.calculate_overtake_points(5, 10)  # Lost positions
-        0.0
-        """
-        positions_gained = max(0, qualifying_pos - race_pos)
-        return positions_gained * self.config.overtake_multiplier
-
-    def calculate_improvement_points(self, race_pos: int, rolling_avg: float) -> float:
-        """
-        Calculate improvement points vs rolling average.
-
-        Parameters
-        ----------
-        race_pos : int
-            Race position (1-20)
+        driver_id : str
+            Driver ID
         rolling_avg : float
-            8-race rolling average position
+            8-race rolling average finish position
+        teammate_id : str
+            ID of teammate driver
+        race_format : STANDARD or SPRINT, optional
+            Race weekend format, by default STANDARD
+        completion_prob : float, optional
+            Fallback completion probability if not found in race_dist, by default 0.95
 
         Returns
         -------
-        float
-            Improvement points (0.0 if no improvement)
-
-        Examples
-        --------
-        >>> calculator = ScoringCalculator()
-        >>> calculator.calculate_improvement_points(1, 3.0)  # 2 positions ahead
-        4.0
-        >>> calculator.calculate_improvement_points(5, 3.0)  # Worse than average
-        0.0
+        DriverPointsBreakdown
+            Detailed breakdown of expected points by component
         """
-        positions_ahead = max(0, round(rolling_avg) - race_pos)
-        if positions_ahead <= 0:
-            return 0.0
+        # Get distributions
+        qual_dist = race_dist.get_driver_distribution(driver_id, "qualifying")
+        race_dist_driver = race_dist.get_driver_distribution(driver_id, "race")
 
-        # Find applicable improvement points
-        return self.config.improvement_points.get(
-            positions_ahead,
-            self.config.improvement_points.get(
-                max(self.config.improvement_points), 0.0
-            ),
-        )
+        # Get sprint distribution if applicable
+        sprint_dist = None
+        if race_format == "SPRINT":
+            try:
+                sprint_dist = race_dist.get_driver_distribution(driver_id, "sprint")
+            except (KeyError, ValueError):
+                pass
 
-    def calculate_teammate_points(self, driver_pos: int, teammate_pos: int) -> float:
-        """
-        Calculate points for beating teammate.
+        # Get teammate distribution
+        try:
+            teammate_dist = race_dist.get_driver_distribution(teammate_id, "race")
+            joint_qual_race = race_dist.get_qualifying_race_distribution(driver_id)
+        except (KeyError, ValueError):
+            teammate_dist = None
+            joint_qual_race = None
 
-        Parameters
-        ----------
-        driver_pos : int
-            Driver's race position (1-20)
-        teammate_pos : int
-            Teammate's race position (1-20)
+        # Try to get completion probability
+        try:
+            completion_prob_value = race_dist.get_completion_probability(driver_id)
+        except KeyError:
+            completion_prob_value = completion_prob
 
-        Returns
-        -------
-        float
-            Teammate points (0.0 if behind teammate)
-
-        Examples
-        --------
-        >>> calculator = ScoringCalculator()
-        >>> calculator.calculate_teammate_points(1, 5)  # 4 positions ahead
-        5.0
-        >>> calculator.calculate_teammate_points(10, 5)  # Behind teammate
-        0.0
-        """
-        if driver_pos >= teammate_pos:
-            return 0.0
-
-        margin = teammate_pos - driver_pos
-
-        # Find applicable threshold
-        thresholds = sorted(self.config.teammate_points.items())
-        for threshold, points in thresholds:
-            if margin <= threshold:
-                return points
-
-        # If beyond all thresholds, return points for maximum threshold
-        if thresholds:
-            return thresholds[-1][1]
-
-        return 0.0
-
-    def calculate_completion_points(self, completion_pct: float) -> float:
-        """
-        Calculate completion stage points.
-
-        Parameters
-        ----------
-        completion_pct : float
-            Race completion percentage (0.0 to 1.0)
-
-        Returns
-        -------
-        float
-            Completion points
-
-        Examples
-        --------
-        >>> calculator = ScoringCalculator()
-        >>> calculator.calculate_completion_points(1.0)  # Full race
-        12.0
-        >>> calculator.calculate_completion_points(0.6)  # 60% completion
-        6.0
-        >>> calculator.calculate_completion_points(0.0)  # No completion
-        0.0
-        """
-        # Count stages completed
-        stages_completed = 0
-        for threshold in sorted(self.config.completion_thresholds):
-            if completion_pct >= threshold:
-                stages_completed += 1
-            else:
-                break
-
-        return stages_completed * self.config.completion_stage_points
-
-    @property
-    def tables(self):
-        """
-        Get scoring tables with attribute-style access.
-
-        Returns
-        -------
-        SimpleNamespace
-            Object for accessing tables via attributes
-        """
-        return SimpleNamespace(**self.engine.tables)
-
-    # Private helper methods
-    def _calculate_driver_components(self, data: DriverWeekendData) -> Dict[str, float]:
-        """Calculate points for each component of driver scoring."""
-        # Initialize components dictionary
-        components = {}
-
-        # Base points
-        components["qualifying"] = self.calculate_qualifying_points(
-            data.positions.qualifying
-        )
-
-        components["race"] = self.calculate_race_points(data.positions.race)
-
-        # Sprint points if applicable
-        if data.format == RaceFormat.SPRINT and data.positions.sprint_finish:
-            components["sprint"] = self.calculate_sprint_points(
-                data.positions.sprint_finish
+        # Calculate expected points
+        if teammate_dist:
+            return self.expected_driver_points(
+                qual_dist=qual_dist,
+                race_dist=race_dist_driver,
+                rolling_avg=rolling_avg,
+                teammate_dist=teammate_dist,
+                completion_prob=completion_prob_value,
+                sprint_dist=sprint_dist,
+                race_format=race_format,
+                joint_qual_race=joint_qual_race,
             )
         else:
-            components["sprint"] = 0.0
+            # Create a simple teammate distribution centered on the average position
+            avg_pos = sum(p * pos for pos, p in race_dist_driver.items())
+            simple_teammate_dist = PositionDistribution({int(avg_pos): 1.0})
 
-        # Overtake points
-        components["overtake"] = self.calculate_overtake_points(
-            data.positions.qualifying, data.positions.race
-        )
+            return self.expected_driver_points(
+                qual_dist=qual_dist,
+                race_dist=race_dist_driver,
+                rolling_avg=rolling_avg,
+                teammate_dist=simple_teammate_dist,
+                completion_prob=completion_prob_value,
+                sprint_dist=sprint_dist,
+                race_format=race_format,
+                joint_qual_race=joint_qual_race,
+            )
 
-        # Improvement points
-        components["improvement"] = self.calculate_improvement_points(
-            data.positions.race, data.rolling_average
-        )
-
-        # Teammate points
-        components["teammate"] = self.calculate_teammate_points(
-            data.positions.race, data.teammate_position
-        )
-
-        # Completion points
-        components["completion"] = self.calculate_completion_points(
-            data.completion_percentage
-        )
-
-        return components
-
-    def _calculate_constructor_components(
-        self, data: ConstructorWeekendData
-    ) -> Dict[str, float]:
-        """Calculate points for each component of constructor scoring."""
-        # Initialize components dictionary
-        components = {
-            "qualifying": 0.0,
-            "race": 0.0,
-        }
-
-        # Calculate qualifying points for both drivers
-        components["qualifying"] += self.config.constructor_qualifying_points.get(
-            data.positions.driver1_qualifying, 0.0
-        )
-        components["qualifying"] += self.config.constructor_qualifying_points.get(
-            data.positions.driver2_qualifying, 0.0
-        )
-
-        # Calculate race points for both drivers
-        components["race"] += self.config.constructor_race_points.get(
-            data.positions.driver1_race, 0.0
-        )
-        components["race"] += self.config.constructor_race_points.get(
-            data.positions.driver2_race, 0.0
-        )
-
-        return components
-
-    def _create_driver_breakdown(
-        self, components: Dict[str, float]
-    ) -> DriverPointsBreakdown:
-        """Create a DriverPointsBreakdown from component dictionary."""
-        return DriverPointsBreakdown(
-            race=components.get("race", 0.0),
-            qualifying=components.get("qualifying", 0.0),
-            sprint=components.get("sprint", 0.0),
-            overtake=components.get("overtake", 0.0),
-            completion=components.get("completion", 0.0),
-            improvement=components.get("improvement", 0.0),
-            teammate=components.get("teammate", 0.0),
-        )
-
+    # Helper methods for expected value calculations
     def _expected_position_points(
         self, dist: PositionDistribution, points_mapping: Dict[int, float]
     ) -> float:
         """Calculate expected points for a position distribution."""
-        return dist.expected_value(points_mapping)
+        return sum(prob * points_mapping.get(pos, 0.0) for pos, prob in dist.items())
 
     def _expected_overtake_points(self, joint_dist: JointDistribution) -> float:
         """Calculate expected overtake points from joint distribution."""
-        expected_points = 0.0
-
-        for (qual_pos, race_pos), prob in joint_dist.items():
-            # Only count positions gained (not lost)
-            positions_gained = max(0, qual_pos - race_pos)
-            expected_points += prob * positions_gained * self.config.overtake_multiplier
-
-        return expected_points
+        return sum(
+            prob * max(0, qual_pos - race_pos) * OVERTAKE_MULTIPLIER
+            for (qual_pos, race_pos), prob in joint_dist.items()
+        )
 
     def _expected_overtake_points_from_marginals(
         self, qual_dist: PositionDistribution, race_dist: PositionDistribution
     ) -> float:
         """Calculate expected overtake points assuming independence."""
         expected_points = 0.0
-
-        # Assuming independence between qualifying and race positions
         for qual_pos, qual_prob in qual_dist.items():
             for race_pos, race_prob in race_dist.items():
-                # Calculate joint probability assuming independence
                 joint_prob = qual_prob * race_prob
-
-                # Only count positions gained (not lost)
                 positions_gained = max(0, qual_pos - race_pos)
-                expected_points += (
-                    joint_prob * positions_gained * self.config.overtake_multiplier
-                )
-
+                expected_points += joint_prob * positions_gained * OVERTAKE_MULTIPLIER
         return expected_points
 
     def _expected_improvement_points(
@@ -893,68 +451,25 @@ class ScoringCalculator:
         for pos, prob in race_dist.items():
             positions_ahead = max(0, rounded_avg - pos)
             if positions_ahead > 0:
-                # Get applicable improvement points or max if beyond table
-                improvement_points = self.config.improvement_points.get(
+                improvement_points = IMPROVEMENT_POINTS.get(
                     positions_ahead,
-                    self.config.improvement_points.get(
-                        max(self.config.improvement_points), 0.0
-                    ),
+                    IMPROVEMENT_POINTS.get(max(IMPROVEMENT_POINTS.keys()), 0.0),
                 )
                 expected_points += prob * improvement_points
 
         return expected_points
 
     def _expected_teammate_points(
-        self,
-        driver_dist: PositionDistribution | JointDistribution,
-        teammate_dist: Optional[PositionDistribution] = None,
+        self, driver_dist: PositionDistribution, teammate_dist: PositionDistribution
     ) -> float:
-        """
-        Calculate expected teammate points.
-
-        Can accept either:
-        1. Two separate distributions (driver_dist and teammate_dist)
-        2. A joint distribution between driver and teammate positions
-        """
+        """Calculate expected teammate points from distributions."""
         expected_points = 0.0
+        thresholds = sorted(TEAMMATE_POINTS.items())
 
-        # Case 1: JointDistribution provided
-        if isinstance(driver_dist, JointDistribution):
-            joint_dist = driver_dist
-            for (driver_pos, tm_pos), prob in joint_dist.items():
-                # Only award points if driver is ahead of teammate
-                if driver_pos < tm_pos:
-                    margin = tm_pos - driver_pos
-
-                    # Find applicable threshold
-                    thresholds = sorted(self.config.teammate_points.items())
-                    points = 0.0
-
-                    for threshold, threshold_points in thresholds:
-                        if margin <= threshold:
-                            points = threshold_points
-                            break
-
-                    # If beyond all thresholds, use max threshold
-                    if not points and thresholds:
-                        points = thresholds[-1][1]
-
-                    expected_points += prob * points
-            return expected_points
-
-        # Case 2: Separate distributions
-        if teammate_dist is None:
-            return 0.0
-
-        # Iterate over all possible driver and teammate positions
         for driver_pos, driver_prob in driver_dist.items():
             for tm_pos, tm_prob in teammate_dist.items():
-                # Only award points if driver is ahead of teammate
                 if driver_pos < tm_pos:
                     margin = tm_pos - driver_pos
-
-                    # Find applicable threshold
-                    thresholds = sorted(self.config.teammate_points.items())
                     points = 0.0
 
                     for threshold, threshold_points in thresholds:
@@ -962,7 +477,6 @@ class ScoringCalculator:
                             points = threshold_points
                             break
 
-                    # If beyond all thresholds, use max threshold
                     if not points and thresholds:
                         points = thresholds[-1][1]
 
@@ -973,29 +487,28 @@ class ScoringCalculator:
     def _expected_completion_points(self, completion_prob: float) -> float:
         """Calculate expected completion points based on completion probability."""
         # Full completion points (all stages)
-        max_points = (
-            len(self.config.completion_thresholds) * self.config.completion_stage_points
-        )
+        max_points = len(COMPLETION_THRESHOLDS) * COMPLETION_STAGE_POINTS
 
         # Points for completing the race
+        if completion_prob >= 1.0:
+            return max_points
+
         points_if_completed = completion_prob * max_points
 
         # DNF probability
         dnf_prob = 1.0 - completion_prob
-        if dnf_prob <= 0.0:
-            return max_points
 
         # Expected DNF points assuming uniform distribution of DNFs across race distance
         expected_dnf_points = 0.0
         prev_threshold = 0.0
 
         # Calculate points for each stage
-        for i, threshold in enumerate(sorted(self.config.completion_thresholds)):
+        for i, threshold in enumerate(sorted(COMPLETION_THRESHOLDS)):
             # Probability of DNF in this interval (relative to overall DNF prob)
             interval_prob = (threshold - prev_threshold) / 1.0 * dnf_prob
 
             # Points for completing all previous stages
-            points = i * self.config.completion_stage_points
+            points = i * COMPLETION_STAGE_POINTS
             expected_dnf_points += interval_prob * points
 
             prev_threshold = threshold

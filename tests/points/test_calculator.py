@@ -1,229 +1,187 @@
 """
-Tests for the main PointsCalculator module.
+Tests for the main ScoringCalculator module.
 
-This module contains tests for the PointsCalculator class,
+This module contains tests for the ScoringCalculator class,
 which orchestrates the calculation of expected fantasy points
 for drivers and constructors.
 """
 
-from unittest.mock import MagicMock
-
 import pytest
 
-from gridrival_ai.points.calculator import PointsCalculator
-from gridrival_ai.points.constructor import ConstructorPointsCalculator
-from gridrival_ai.points.driver import DriverPointsCalculator
-from gridrival_ai.probabilities.distributions import (
-    RaceDistribution,
-    SessionDistribution,
-)
+from gridrival_ai.probabilities.distributions import PositionDistribution
 from gridrival_ai.scoring.calculator import ScoringCalculator
-from gridrival_ai.scoring.types import RaceFormat
 
 
 @pytest.fixture
-def mock_race_distribution():
-    """Create a mock race distribution."""
-    mock_race = MagicMock(spec=RaceDistribution)
-
-    # Mock session distributions
-    mock_race.race = MagicMock(spec=SessionDistribution)
-    mock_race.qualifying = MagicMock(spec=SessionDistribution)
-    mock_race.sprint = MagicMock(spec=SessionDistribution)
-
-    return mock_race
-
-
-@pytest.fixture
-def mock_scorer():
-    """Create a mock scorer."""
-    return MagicMock(spec=ScoringCalculator)
-
-
-@pytest.fixture
-def mock_driver_stats():
-    """Create sample driver rolling average statistics."""
-    return {
-        "VER": 1.5,
-        "PER": 3.2,
-        "HAM": 2.8,
-        "RUS": 4.5,
-        "LEC": 3.3,
-        "SAI": 4.2,
-    }
-
-
-@pytest.fixture
-def calculator(mock_race_distribution, mock_scorer, mock_driver_stats):
-    """Create a PointsCalculator instance with mocks."""
-    return PointsCalculator(
-        scorer=mock_scorer,
-        race_distribution=mock_race_distribution,
-        driver_stats=mock_driver_stats,
-    )
-
-
-def test_calculator_initialization(
-    mock_race_distribution, mock_scorer, mock_driver_stats
-):
-    """Test that the calculator initializes correctly with its dependencies."""
-    calculator = PointsCalculator(
-        mock_scorer, mock_race_distribution, mock_driver_stats
-    )
-
-    # Check that calculator has all required attributes
-    assert hasattr(calculator, "scorer")
-    assert hasattr(calculator, "race_distribution")
-    assert hasattr(calculator, "driver_stats")
-    assert hasattr(calculator, "driver_calculator")
-    assert hasattr(calculator, "constructor_calculator")
-
-    # Check that dependencies are correctly assigned
-    assert calculator.scorer == mock_scorer
-    assert calculator.driver_stats == mock_driver_stats
-    assert calculator.race_distribution == mock_race_distribution
-
-    # Check that component calculators are initialized
-    assert isinstance(calculator.driver_calculator, DriverPointsCalculator)
-    assert isinstance(calculator.constructor_calculator, ConstructorPointsCalculator)
+def calculator():
+    """Create a ScoringCalculator instance."""
+    return ScoringCalculator()
 
 
 def test_calculate_driver_points(calculator):
-    """Test calculating driver points delegates to the driver calculator."""
-    # Mock the driver calculator's calculate method
-    driver_result = {
-        "qualifying": 20.5,
-        "race": 25.3,
-        "overtake": 6.2,
-        "teammate": 2.0,
-        "completion": 12.0,
-        "improvement": 4.5,
-    }
-    calculator.driver_calculator.calculate = MagicMock(return_value=driver_result)
-
-    # Call the method under test
-    result = calculator.calculate_driver_points("VER")
-
-    # Check that the result matches the mock
-    assert result == driver_result
-
-    # Verify correct arguments were passed to driver calculator
-    calculator.driver_calculator.calculate.assert_called_once_with(
-        driver_id="VER",
-        rolling_avg=1.5,  # From mock_driver_stats
-        teammate_id="TSU",  # Should find teammate from CONSTRUCTORS
-        race_format=RaceFormat.STANDARD,
+    """Test calculating driver points."""
+    # Test a perfect race (P1 in all sessions)
+    points = calculator.calculate_driver_points(
+        qualifying_pos=1,
+        race_pos=1,
+        rolling_avg=2.0,
+        teammate_pos=2,
+        sprint_pos=1,
+        race_format="SPRINT",
+        completion_pct=1.0,
     )
 
+    # Verify components
+    assert points.qualifying == 50  # P1 in qualifying
+    assert points.race == 100  # P1 in race
+    assert points.sprint == 20  # P1 in sprint
+    assert points.overtake == 0  # No positions gained (P1 -> P1)
+    assert points.improvement == 0  # 1 position ahead of average
+    assert points.teammate == 2  # Beat teammate by 1 position
+    assert points.completion == 12  # Full completion (4 stages * 3 points)
 
-def test_calculate_driver_points_with_sprint(calculator):
-    """Test calculating driver points for a sprint race weekend."""
-    # Mock the driver calculator's calculate method
-    driver_result = {
-        "qualifying": 20.5,
-        "race": 25.3,
-        "sprint": 12.5,
-        "overtake": 6.2,
-        "teammate": 2.0,
-        "completion": 12.0,
-        "improvement": 4.5,
-    }
-    calculator.driver_calculator.calculate = MagicMock(return_value=driver_result)
-
-    # Call the method under test with sprint format
-    result = calculator.calculate_driver_points("VER", race_format=RaceFormat.SPRINT)
-
-    # Check that the result matches the mock
-    assert result == driver_result
-
-    # Verify sprint format was passed to driver calculator
-    calculator.driver_calculator.calculate.assert_called_once_with(
-        driver_id="VER",
-        rolling_avg=1.5,  # From mock_driver_stats
-        teammate_id="TSU",  # Should find teammate from CONSTRUCTORS
-        race_format=RaceFormat.SPRINT,
-    )
+    # Verify total
+    assert points.total == 50 + 100 + 20 + 0 + 0 + 2 + 12
 
 
 def test_calculate_constructor_points(calculator):
-    """Test calculating constructor points delegates to the constructor calculator."""
-    # Mock the constructor calculator's calculate method
-    constructor_result = {
-        "qualifying": 35.8,
-        "race": 48.7,
-    }
-    calculator.constructor_calculator.calculate = MagicMock(
-        return_value=constructor_result
+    """Test calculating constructor points."""
+    points = calculator.calculate_constructor_points(
+        driver1_qualifying=1,
+        driver1_race=1,
+        driver2_qualifying=2,
+        driver2_race=2,
     )
 
-    # Call the method under test
-    result = calculator.calculate_constructor_points("RBR")
+    # Verify structure
+    assert isinstance(points, dict)
+    assert "qualifying" in points
+    assert "race" in points
 
-    # Check that the result matches the mock
-    assert result == constructor_result
+    # Verify components
+    assert points["qualifying"] == 30 + 29  # P1 (30) + P2 (29)
+    assert points["race"] == 60 + 58  # P1 (60) + P2 (58)
 
-    # Verify correct arguments were passed to constructor calculator
-    calculator.constructor_calculator.calculate.assert_called_once_with(
-        constructor_id="RBR", race_format=RaceFormat.STANDARD
+
+def test_expected_driver_points(calculator):
+    """Test calculating expected points from distributions."""
+    # Create distributions
+    qual_dist = PositionDistribution({1: 0.6, 2: 0.4})
+    race_dist = PositionDistribution({1: 0.7, 2: 0.3})
+    teammate_dist = PositionDistribution({1: 0.0, 2: 0.5, 3: 0.5})
+
+    # Calculate expected points
+    points = calculator.expected_driver_points(
+        qual_dist=qual_dist,
+        race_dist=race_dist,
+        rolling_avg=3.0,
+        teammate_dist=teammate_dist,
+        completion_prob=1.0,
+        race_format="STANDARD",
     )
 
+    # Expected qualifying points: 0.6*50 + 0.4*48 = 30 + 19.2 = 49.2
+    assert points.qualifying == pytest.approx(49.2)
 
-def test_calculate_constructor_points_with_sprint(calculator):
-    """Test calculating constructor points for a sprint race weekend."""
-    # Mock the constructor calculator's calculate method
-    constructor_result = {
-        "qualifying": 35.8,
-        "race": 48.7,
-    }
-    calculator.constructor_calculator.calculate = MagicMock(
-        return_value=constructor_result
+    # Expected race points: 0.7*100 + 0.3*97 = 70 + 29.1 = 99.1
+    assert points.race == pytest.approx(99.1)
+
+    # Check other components
+    assert points.improvement > 0
+    assert points.teammate > 0
+    assert points.completion == 12  # Full completion probability
+
+
+def test_expected_constructor_points(calculator):
+    """Test calculating expected constructor points from distributions."""
+    # Create distributions
+    d1_qual = PositionDistribution({1: 0.7, 2: 0.3})
+    d1_race = PositionDistribution({1: 0.8, 2: 0.2})
+    d2_qual = PositionDistribution({1: 0.0, 2: 0.6, 3: 0.4})
+    d2_race = PositionDistribution({1: 0.0, 2: 0.5, 3: 0.5})
+
+    # Calculate expected points
+    points = calculator.expected_constructor_points(
+        driver1_qual_dist=d1_qual,
+        driver1_race_dist=d1_race,
+        driver2_qual_dist=d2_qual,
+        driver2_race_dist=d2_race,
     )
 
-    # Call the method under test with sprint format
-    result = calculator.calculate_constructor_points(
-        "RBR", race_format=RaceFormat.SPRINT
+    # Expected qualifying: 0.7*30 + 0.3*29 + 0.6*29 + 0.4*28 = 21
+    # + 8.7 + 17.4 + 11.2 = 58.3
+    assert points["qualifying"] == pytest.approx(58.3)
+
+    # Expected race: 0.8*60 + 0.2*58 + 0.5*58 + 0.5*56 = 48
+    # + 11.6 + 29 + 28 = 116.6
+    assert points["race"] == pytest.approx(116.6)
+
+
+def test_sprint_race(calculator):
+    """Test calculation with sprint race format."""
+    # Standard race (no sprint)
+    std_points = calculator.calculate_driver_points(
+        qualifying_pos=1,
+        race_pos=1,
+        rolling_avg=2.0,
+        teammate_pos=2,
+        race_format="STANDARD",
+        completion_pct=1.0,
     )
 
-    # Check that the result matches the mock
-    assert result == constructor_result
-
-    # Verify sprint format was passed to constructor calculator
-    calculator.constructor_calculator.calculate.assert_called_once_with(
-        constructor_id="RBR", race_format=RaceFormat.SPRINT
+    # Sprint race
+    sprint_points = calculator.calculate_driver_points(
+        qualifying_pos=1,
+        race_pos=1,
+        sprint_pos=1,
+        rolling_avg=2.0,
+        teammate_pos=2,
+        race_format="SPRINT",
+        completion_pct=1.0,
     )
 
-
-def test_constructor_not_found(calculator):
-    """Test handling when constructor is not found."""
-    # Mock the constructor calculator to raise KeyError
-    calculator.constructor_calculator.calculate = MagicMock(
-        side_effect=KeyError("Constructor not found")
-    )
-
-    # Calculate points for unknown constructor should propagate the error
-    with pytest.raises(KeyError, match="Constructor not found"):
-        calculator.calculate_constructor_points("UNKNOWN")
+    # Sprint should have more points
+    assert sprint_points.total > std_points.total
+    assert sprint_points.sprint == 20  # P1 in sprint
 
 
-def test_integration_with_component_calculators(calculator):
-    """Test that the calculator integrates with its component calculators."""
-    # Mock driver and constructor calculators to return sample results
-    driver_result = {"qualifying": 20.5, "race": 25.3}
-    constructor_result = {"qualifying": 35.8, "race": 48.7}
+def test_partial_completion(calculator):
+    """Test scoring with partial race completion."""
+    # Test different completion percentages
+    stages = [0.0, 0.2, 0.3, 0.6, 0.8, 1.0]
+    expected_completion_points = [0, 0, 3, 6, 9, 12]
 
-    calculator.driver_calculator.calculate = MagicMock(return_value=driver_result)
-    calculator.constructor_calculator.calculate = MagicMock(
-        return_value=constructor_result
-    )
+    for completion, expected in zip(stages, expected_completion_points):
+        points = calculator.calculate_driver_points(
+            qualifying_pos=1,
+            race_pos=1,
+            rolling_avg=1.0,
+            teammate_pos=2,
+            completion_pct=completion,
+        )
+        assert points.completion == expected
 
-    # Call both calculation methods
-    dr_points = calculator.calculate_driver_points("VER")
-    con_points = calculator.calculate_constructor_points("RBR")
 
-    # Verify results
-    assert dr_points == driver_result
-    assert con_points == constructor_result
+def test_expected_completion_points(calculator):
+    """Test expected completion points with different probabilities."""
+    # Test with different completion probabilities
+    probs = [0.0, 0.5, 1.0]
 
-    # Verify both calculators were called
-    assert calculator.driver_calculator.calculate.called
-    assert calculator.constructor_calculator.calculate.called
+    for prob in probs:
+        points = calculator.expected_driver_points(
+            qual_dist=PositionDistribution({1: 1.0}),
+            race_dist=PositionDistribution({1: 1.0}),
+            rolling_avg=1.0,
+            teammate_dist=PositionDistribution({1: 0.0, 2: 1.0}),
+            completion_prob=prob,
+        )
+
+        # Full completion is 12 points
+        # With prob=0.5, expected value should be around 6-7 points
+        # (not exactly 6 because of stage distribution)
+        if prob == 0.0:
+            assert points.completion < 6
+        elif prob == 0.5:
+            assert 6 <= points.completion <= 9
+        else:  # prob == 1.0
+            assert points.completion == 12

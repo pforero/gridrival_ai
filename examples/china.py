@@ -1,9 +1,7 @@
 from gridrival_ai.data.fantasy import FantasyLeagueData
 from gridrival_ai.optimization.optimizer import TeamOptimizer
-from gridrival_ai.points.calculator import PointsCalculator
 from gridrival_ai.probabilities.distributions import RaceDistribution
 from gridrival_ai.scoring.calculator import ScoringCalculator
-from gridrival_ai.scoring.types import RaceFormat
 
 # Updated driver salaries (in millions) from screenshots
 driver_salaries = {
@@ -336,15 +334,10 @@ def main():
     # Step 3: Set up scoring calculator
     scorer = ScoringCalculator()
 
-    # Step 4: Create points calculator
-    points_calculator = PointsCalculator(
-        scorer=scorer, race_distribution=race_dist, driver_stats=rolling_averages
-    )
-
-    # Step 5: Create and run the optimizer
+    # Step 4: Create and run the optimizer
     optimizer = TeamOptimizer(
         league_data=league_data,
-        points_calculator=points_calculator,
+        scorer=scorer,
         race_distribution=race_dist,
         driver_stats=rolling_averages,
         budget=98.1,  # Updated budget is £98.1M
@@ -354,9 +347,9 @@ def main():
     # Updated total budget is £98.1M
 
     # Run the optimization for a sprint race format
-    result = optimizer.optimize(race_format=RaceFormat.SPRINT)
+    result = optimizer.optimize(race_format="SPRINT")
 
-    # Step 6: Output the best solution
+    # Step 5: Output the best solution
     if result.best_solution:
         print("\nOPTIMAL TEAM FOUND:")
         print("-----------------")

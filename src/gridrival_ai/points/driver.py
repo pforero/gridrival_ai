@@ -18,7 +18,7 @@ from gridrival_ai.probabilities.distributions import (
     RaceDistribution,
 )
 from gridrival_ai.scoring.calculator import ScoringCalculator
-from gridrival_ai.scoring.types import RaceFormat
+from gridrival_ai.scoring.constants import RaceFormat
 
 
 class DriverPointsCalculator:
@@ -43,7 +43,7 @@ class DriverPointsCalculator:
     ...     driver_id="VER",
     ...     rolling_avg=1.5,
     ...     teammate_id="PER",
-    ...     race_format=RaceFormat.STANDARD
+    ...     race_format="STANDARD"
     ... )
     >>> print(f"Total expected points: {sum(points.values()):.1f}")
     Total expected points: 156.5
@@ -66,7 +66,7 @@ class DriverPointsCalculator:
         driver_id: str,
         rolling_avg: float,
         teammate_id: str,
-        race_format: RaceFormat = RaceFormat.STANDARD,
+        race_format: RaceFormat = "STANDARD",
     ) -> Dict[str, float]:
         """
         Calculate expected points breakdown for a driver.
@@ -80,7 +80,7 @@ class DriverPointsCalculator:
         teammate_id : str
             Teammate driver ID
         race_format : RaceFormat, optional
-            Type of race weekend, by default RaceFormat.STANDARD
+            Type of race weekend, by default "STANDARD"
 
         Returns
         -------
@@ -111,7 +111,7 @@ class DriverPointsCalculator:
         )
 
         # Calculate sprint points if applicable
-        if race_format == RaceFormat.SPRINT:
+        if race_format == "SPRINT":
             try:
                 sprint_dist = self.race_distribution.get_driver_distribution(
                     driver_id, "sprint"

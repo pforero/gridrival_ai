@@ -6,101 +6,25 @@ from gridrival_ai.probabilities.distributions import (
     JointDistribution,
     PositionDistribution,
 )
-from gridrival_ai.scoring.calculator import ScoringCalculator
-from gridrival_ai.scoring.config import ScoringConfig
-from gridrival_ai.scoring.types import (
+from gridrival_ai.scoring.calculator import (
     DriverPointsBreakdown,
-    DriverPositions,
-    RaceFormat,
+    ScoringCalculator,
 )
 
 
 @pytest.fixture
-def simple_config():
-    """Create a simple scoring configuration for testing."""
-    # Create a simplified scoring config for easier testing
-    return ScoringConfig(
-        qualifying_points={
-            1: 10,
-            2: 8,
-            3: 6,
-            4: 5,
-            5: 4,
-            6: 3,
-            7: 2,
-            8: 1,
-            **{i: 0 for i in range(9, 21)},
-        },
-        race_points={
-            1: 25,
-            2: 18,
-            3: 15,
-            4: 12,
-            5: 10,
-            6: 8,
-            7: 6,
-            8: 4,
-            9: 2,
-            10: 1,
-            **{i: 0 for i in range(11, 21)},
-        },
-        sprint_points={
-            1: 8,
-            2: 7,
-            3: 6,
-            4: 5,
-            5: 4,
-            6: 3,
-            7: 2,
-            8: 1,
-            **{i: 0 for i in range(9, 21)},
-        },
-        constructor_qualifying_points={
-            1: 5,
-            2: 4,
-            3: 3,
-            4: 2,
-            5: 1,
-            **{i: 0 for i in range(6, 21)},
-        },
-        constructor_race_points={
-            1: 10,
-            2: 8,
-            3: 6,
-            4: 5,
-            5: 4,
-            6: 3,
-            7: 2,
-            8: 1,
-            **{i: 0 for i in range(9, 21)},
-        },
-        improvement_points={1: 2, 2: 4, 3: 6, 4: 8, 5: 10},
-        teammate_points={2: 2, 5: 5, 10: 8},
-        completion_stage_points=3.0,
-        completion_thresholds=[0.25, 0.5, 0.75, 0.9],
-        overtake_multiplier=2.0,
-    )
-
-
-@pytest.fixture
-def calculator(simple_config):
-    """Create a ScoringCalculator with the simple config."""
-    return ScoringCalculator(config=simple_config)
+def calculator():
+    """Create a ScoringCalculator."""
+    return ScoringCalculator()
 
 
 class TestScoringCalculator:
     """Test suite for ScoringCalculator class."""
 
-    def test_initialization(self, simple_config):
-        """Test initialization with config."""
-        calculator = ScoringCalculator(config=simple_config)
-        assert calculator.config == simple_config
-        assert calculator.engine is not None
-
-        # Test default initialization
-        default_calculator = ScoringCalculator()
-        assert default_calculator.config is not None
-        assert default_calculator.engine is not None
+    def test_initialization(self):
+        """Test initialization."""
+        calculator = ScoringCalculator()
+        assert calculator is not None
 
     def test_calculate_driver_points(self, calculator):
         """Test calculating points for a driver."""
@@ -111,7 +35,7 @@ class TestScoringCalculator:
             rolling_avg=2.0,
             teammate_pos=2,
             sprint_pos=1,
-            race_format=RaceFormat.SPRINT,
+            race_format="SPRINT",
             completion_pct=1.0,
         )
 
@@ -119,16 +43,16 @@ class TestScoringCalculator:
         assert isinstance(points, DriverPointsBreakdown)
 
         # Verify components
-        assert points.qualifying == 10  # P1 in qualifying
-        assert points.race == 25  # P1 in race
-        assert points.sprint == 8  # P1 in sprint
+        assert points.qualifying == 50  # P1 in qualifying
+        assert points.race == 100  # P1 in race
+        assert points.sprint == 20  # P1 in sprint
         assert points.overtake == 0  # No positions gained (P1 -> P1)
-        assert points.improvement == 2  # 1 position ahead of average
+        assert points.improvement == 0  # 1 position ahead of average
         assert points.teammate == 2  # Beat teammate by 1 position
         assert points.completion == 12  # Full completion (4 stages * 3 points)
 
         # Verify total
-        assert points.total == 59
+        assert points.total == 50 + 100 + 20 + 0 + 0 + 2 + 12
 
     def test_calculate_constructor_points(self, calculator):
         """Test calculating points for a constructor."""
@@ -137,7 +61,6 @@ class TestScoringCalculator:
             driver1_race=1,
             driver2_qualifying=2,
             driver2_race=2,
-            race_format=RaceFormat.STANDARD,
         )
 
         # Verify structure
@@ -146,33 +69,31 @@ class TestScoringCalculator:
         assert "race" in points
 
         # Verify components
-        assert points["qualifying"] == 9  # P1 (5) + P2 (4)
-        assert points["race"] == 18  # P1 (10) + P2 (8)
+        assert points["qualifying"] == 30 + 29  # P1 (30) + P2 (29)
+        assert points["race"] == 60 + 58  # P1 (60) + P2 (58)
 
     def test_expected_driver_points(self, calculator):
         """Test calculating expected points from distributions."""
         # Create distributions
         qual_dist = PositionDistribution({1: 0.6, 2: 0.4})
         race_dist = PositionDistribution({1: 0.7, 2: 0.3})
-        teammate_dist = PositionDistribution(
-            {1: 0.0, 2: 0.5, 3: 0.5}
-        )  # Added position 1
+        teammate_dist = PositionDistribution({1: 0.0, 2: 0.5, 3: 0.5})
 
         # Calculate expected points
         points = calculator.expected_driver_points(
             qual_dist=qual_dist,
             race_dist=race_dist,
-            rolling_avg=2.5,
+            rolling_avg=3,
             teammate_dist=teammate_dist,
             completion_prob=1.0,
-            race_format=RaceFormat.STANDARD,
+            race_format="STANDARD",
         )
 
-        # Expected qualifying points: 0.6*10 + 0.4*8 = 9.2
-        assert points.qualifying == pytest.approx(9.2)
+        # Expected qualifying points: 0.6*50 + 0.4*48 = 30 + 19.2 = 49.2
+        assert points.qualifying == pytest.approx(49.2)
 
-        # Expected race points: 0.7*25 + 0.3*18 = 17.5 + 5.4 = 22.9
-        assert points.race == pytest.approx(22.9)
+        # Expected race points: 0.7*100 + 0.3*97 = 70 + 29.1 = 99.1
+        assert points.race == pytest.approx(99.1)
 
         # Check other components
         assert points.improvement > 0
@@ -184,8 +105,8 @@ class TestScoringCalculator:
         # Create distributions
         d1_qual = PositionDistribution({1: 0.7, 2: 0.3})
         d1_race = PositionDistribution({1: 0.8, 2: 0.2})
-        d2_qual = PositionDistribution({1: 0.0, 2: 0.6, 3: 0.4})  # Added position 1
-        d2_race = PositionDistribution({1: 0.0, 2: 0.5, 3: 0.5})  # Added position 1
+        d2_qual = PositionDistribution({1: 0.0, 2: 0.6, 3: 0.4})
+        d2_race = PositionDistribution({1: 0.0, 2: 0.5, 3: 0.5})
 
         # Calculate expected points
         points = calculator.expected_constructor_points(
@@ -195,47 +116,13 @@ class TestScoringCalculator:
             driver2_race_dist=d2_race,
         )
 
-        # Expected qualifying: 0.7*5 + 0.3*4 + 0.6*4 + 0.4*3 = 3.5 + 1.2 + 2.4 + 1.2 = 8.3  # noqa: E501
-        assert points["qualifying"] == pytest.approx(8.3)
+        # Expected qualifying: 0.7*30 + 0.3*29 + 0.6*29 + 0.4*28 = 21
+        # + 8.7 + 17.4 + 11.2 = 58.3
+        assert points["qualifying"] == pytest.approx(58.3)
 
-        # Expected race: 0.8*10 + 0.2*8 + 0.5*8 + 0.5*6 = 8.0 + 1.6 + 4.0 + 3.0 = 16.6
-        assert points["race"] == pytest.approx(16.6)
-
-    def test_calculate_individual_components(self, calculator):
-        """Test calculating individual scoring components."""
-        # Test qualifying points
-        assert calculator.calculate_qualifying_points(1) == 10
-        assert calculator.calculate_qualifying_points(5) == 4
-
-        # Test race points
-        assert calculator.calculate_race_points(1) == 25
-        assert calculator.calculate_race_points(10) == 1
-
-        # Test sprint points
-        assert calculator.calculate_sprint_points(1) == 8
-        assert calculator.calculate_sprint_points(9) == 0  # No points beyond P8
-
-        # Test overtake points
-        assert (
-            calculator.calculate_overtake_points(10, 5) == 10
-        )  # 5 positions * 2 points
-        assert (
-            calculator.calculate_overtake_points(5, 10) == 0
-        )  # No points for losing positions
-
-        # Test improvement points
-        assert calculator.calculate_improvement_points(2, 5.0) == 6  # 3 positions ahead
-        assert calculator.calculate_improvement_points(10, 5.0) == 0  # No improvement
-
-        # Test teammate points
-        assert calculator.calculate_teammate_points(1, 3) == 2  # 2 positions ahead
-        assert calculator.calculate_teammate_points(1, 8) == 8  # 7 positions ahead
-        assert calculator.calculate_teammate_points(3, 1) == 0  # Behind teammate
-
-        # Test completion points
-        assert calculator.calculate_completion_points(1.0) == 12  # Full completion
-        assert calculator.calculate_completion_points(0.6) == 6  # 2 stages (25%, 50%)
-        assert calculator.calculate_completion_points(0.0) == 0  # No completion
+        # Expected race: 0.8*60 + 0.2*58 + 0.5*58 + 0.5*56 = 48
+        # + 11.6 + 29 + 28 = 116.6
+        assert points["race"] == pytest.approx(116.6)
 
     def test_sprint_race(self, calculator):
         """Test calculation with sprint race format."""
@@ -245,7 +132,7 @@ class TestScoringCalculator:
             race_pos=1,
             rolling_avg=2.0,
             teammate_pos=2,
-            race_format=RaceFormat.STANDARD,
+            race_format="STANDARD",
             completion_pct=1.0,
         )
 
@@ -256,27 +143,13 @@ class TestScoringCalculator:
             sprint_pos=1,
             rolling_avg=2.0,
             teammate_pos=2,
-            race_format=RaceFormat.SPRINT,
+            race_format="SPRINT",
             completion_pct=1.0,
         )
 
         # Sprint should have more points
         assert sprint_points.total > std_points.total
-        assert sprint_points.sprint == 8  # P1 in sprint
-
-    def test_driver_position_validation(self):
-        """Test validation of driver positions."""
-        # Should raise error for invalid positions
-        with pytest.raises(Exception):
-            DriverPositions(qualifying=0, race=1)  # Invalid qualifying position
-
-        with pytest.raises(Exception):
-            DriverPositions(qualifying=1, race=21)  # Invalid race position
-
-        with pytest.raises(Exception):
-            DriverPositions(
-                qualifying=1, race=1, sprint_finish=22
-            )  # Invalid sprint position
+        assert sprint_points.sprint == 20  # P1 in sprint
 
     def test_joint_distribution_overtakes(self, calculator):
         """Test overtake calculation with explicit joint distribution."""
@@ -299,29 +172,25 @@ class TestScoringCalculator:
             qual_dist=qual_dist,
             race_dist=race_dist,
             rolling_avg=2.0,
-            teammate_dist=PositionDistribution(
-                {1: 0.0, 2: 0.0, 3: 1.0}
-            ),  # Added position 1
+            teammate_dist=PositionDistribution({1: 0.0, 2: 0.0, 3: 1.0}),
             joint_qual_race=joint_dist,
         )
 
-        # Expected overtake points: only (2,1) contributes = 0.2 * 2 * 1 = 0.4
-        assert points_with_joint.overtake == pytest.approx(0.4)
+        # Expected overtake points: only (2,1) contributes = 0.2 * 3 * 1 = 0.6
+        assert points_with_joint.overtake == pytest.approx(0.6)
 
         # Calculate without joint (assuming independence)
         points_independent = calculator.expected_driver_points(
             qual_dist=qual_dist,
             race_dist=race_dist,
             rolling_avg=2.0,
-            teammate_dist=PositionDistribution(
-                {1: 0.0, 2: 0.0, 3: 1.0}
-            ),  # Added position 1
+            teammate_dist=PositionDistribution({1: 0.0, 2: 0.0, 3: 1.0}),
         )
 
         # Independent overtake points should be different
         # P(Q1,R2) = 0.6*0.3 = 0.18, P(Q2,R1) = 0.4*0.7 = 0.28
-        # Expected: 0.28 * 2 * 1 = 0.56
-        assert points_independent.overtake == pytest.approx(0.56)
+        # Expected: 0.28 * 3 * 1 = 0.84
+        assert points_independent.overtake == pytest.approx(0.84)
         assert points_with_joint.overtake != points_independent.overtake
 
     def test_partial_completion(self, calculator):
@@ -350,9 +219,7 @@ class TestScoringCalculator:
                 qual_dist=PositionDistribution({1: 1.0}),
                 race_dist=PositionDistribution({1: 1.0}),
                 rolling_avg=1.0,
-                teammate_dist=PositionDistribution(
-                    {1: 0.0, 2: 1.0}
-                ),  # Added position 1
+                teammate_dist=PositionDistribution({1: 0.0, 2: 1.0}),
                 completion_prob=prob,
             )
 
@@ -370,9 +237,9 @@ class TestScoringCalculator:
         """Test DriverPointsBreakdown class."""
         # Create a breakdown
         breakdown = DriverPointsBreakdown(
-            qualifying=10,
-            race=25,
-            sprint=8,
+            qualifying=50,
+            race=100,
+            sprint=20,
             overtake=6,
             improvement=4,
             teammate=2,
@@ -380,13 +247,13 @@ class TestScoringCalculator:
         )
 
         # Check individual components
-        assert breakdown.qualifying == 10
-        assert breakdown.race == 25
-        assert breakdown.sprint == 8
+        assert breakdown.qualifying == 50
+        assert breakdown.race == 100
+        assert breakdown.sprint == 20
         assert breakdown.overtake == 6
         assert breakdown.improvement == 4
         assert breakdown.teammate == 2
         assert breakdown.completion == 12
 
         # Check total
-        assert breakdown.total == 67
+        assert breakdown.total == 194

@@ -14,7 +14,7 @@ from gridrival_ai.points.constructor import ConstructorPointsCalculator
 from gridrival_ai.points.driver import DriverPointsCalculator
 from gridrival_ai.probabilities.distributions import RaceDistribution
 from gridrival_ai.scoring.calculator import ScoringCalculator
-from gridrival_ai.scoring.types import RaceFormat
+from gridrival_ai.scoring.constants import RaceFormat
 
 
 class PointsCalculator:
@@ -69,7 +69,9 @@ class PointsCalculator:
         )
 
     def calculate_driver_points(
-        self, driver_id: str, race_format: RaceFormat = RaceFormat.STANDARD
+        self,
+        driver_id: str,
+        race_format: RaceFormat = "STANDARD",
     ) -> Dict[str, float]:
         """
         Calculate expected points breakdown for a driver.
@@ -79,7 +81,7 @@ class PointsCalculator:
         driver_id : str
             Driver ID (e.g., "VER")
         race_format : RaceFormat, optional
-            Type of race weekend (standard/sprint), by default RaceFormat.STANDARD
+            Type of race weekend (standard/sprint), by default "STANDARD"
 
         Returns
         -------
@@ -99,7 +101,9 @@ class PointsCalculator:
         )
 
     def calculate_constructor_points(
-        self, constructor_id: str, race_format: RaceFormat = RaceFormat.STANDARD
+        self,
+        constructor_id: str,
+        race_format: RaceFormat = "STANDARD",
     ) -> Dict[str, float]:
         """
         Calculate expected points breakdown for a constructor.
@@ -109,7 +113,7 @@ class PointsCalculator:
         constructor_id : str
             Constructor ID (e.g., "RBR")
         race_format : RaceFormat, optional
-            Type of race weekend, by default RaceFormat.STANDARD
+            Type of race weekend, by default "STANDARD"
 
         Returns
         -------

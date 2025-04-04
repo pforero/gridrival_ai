@@ -17,7 +17,6 @@ from gridrival_ai.probabilities.distributions import (
     SessionDistribution,
 )
 from gridrival_ai.scoring.calculator import ScoringCalculator
-from gridrival_ai.scoring.types import RaceFormat
 
 
 @pytest.fixture
@@ -115,7 +114,7 @@ def test_constructor_points_calculation(mock_race_distribution, mock_scorer):
         mock_constructors.get.return_value = mock_constructor
 
         # Calculate points for Red Bull
-        points = calculator.calculate("RBR", RaceFormat.STANDARD)
+        points = calculator.calculate("RBR")
 
     # Verify points structure
     assert isinstance(points, dict)
@@ -166,7 +165,7 @@ def test_missing_driver_distribution(mock_race_distribution, mock_scorer):
         )
 
         # Calculate should work with only one driver's points
-        points = calculator.calculate("RBR", RaceFormat.STANDARD)
+        points = calculator.calculate("RBR")
 
     # Should only include VER's points
     assert points["qualifying"] > 0.0
@@ -197,8 +196,8 @@ def test_different_race_formats(mock_race_distribution, mock_scorer):
         mock_constructors.get.return_value = mock_constructor
 
         # Calculate points for both race formats
-        standard_points = calculator.calculate("RBR", RaceFormat.STANDARD)
-        sprint_points = calculator.calculate("RBR", RaceFormat.SPRINT)
+        standard_points = calculator.calculate("RBR")
+        sprint_points = calculator.calculate("RBR")
 
     # Points should be the same regardless of race format
     assert standard_points["qualifying"] == sprint_points["qualifying"]
@@ -226,7 +225,7 @@ def test_integration_with_position_calculator(mock_race_distribution, mock_score
             mock_calc.return_value = 25.0
 
             # Calculate constructor points
-            points = calculator.calculate("RBR", RaceFormat.STANDARD)
+            points = calculator.calculate("RBR")
 
         # Verify that position calculator was called for qualifying and race
         assert mock_calc.call_count == 4  # Twice for each driver (qual + race)

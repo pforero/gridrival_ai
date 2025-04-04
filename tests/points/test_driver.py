@@ -25,7 +25,6 @@ from gridrival_ai.probabilities.distributions import (
     SessionDistribution,
 )
 from gridrival_ai.scoring.calculator import ScoringCalculator
-from gridrival_ai.scoring.types import RaceFormat
 
 
 @pytest.fixture
@@ -162,7 +161,7 @@ class TestDriverPointsCalculator:
                                 driver_id="VER",
                                 rolling_avg=1.5,
                                 teammate_id="HAM",
-                                race_format=RaceFormat.STANDARD,
+                                race_format="STANDARD",
                             )
 
                             # Verify components
@@ -207,7 +206,7 @@ class TestDriverPointsCalculator:
                                 driver_id="VER",
                                 rolling_avg=1.5,
                                 teammate_id="HAM",
-                                race_format=RaceFormat.SPRINT,
+                                race_format="SPRINT",
                             )
 
                             # Verify components
@@ -242,7 +241,7 @@ class TestDriverPointsCalculator:
                 driver_id="VER",
                 rolling_avg=1.5,
                 teammate_id="HAM",
-                race_format=RaceFormat.SPRINT,
+                race_format="SPRINT",
             )
 
             # Verify sprint calculated from race distribution
@@ -274,7 +273,7 @@ class TestDriverPointsCalculator:
             driver_id="VER",
             rolling_avg=1.5,
             teammate_id="HAM",
-            race_format=RaceFormat.STANDARD,
+            race_format="STANDARD",
         )
 
         # Verify teammate points are 0
@@ -294,7 +293,7 @@ class TestDriverPointsCalculator:
             driver_id="VER",
             rolling_avg=1.5,
             teammate_id="HAM",
-            race_format=RaceFormat.STANDARD,
+            race_format="STANDARD",
         )
 
         # Should still have completion points (using default value)
@@ -310,7 +309,7 @@ class TestDriverPointsCalculator:
             driver_id="VER",
             rolling_avg=1.5,
             teammate_id="HAM",
-            race_format=RaceFormat.STANDARD,
+            race_format="STANDARD",
         )
 
         # Verify expected API calls
@@ -340,5 +339,5 @@ class TestDriverPointsCalculator:
                 driver_id="VER",
                 rolling_avg=1.5,
                 teammate_id="HAM",
-                race_format=RaceFormat.STANDARD,
+                race_format="STANDARD",
             )
