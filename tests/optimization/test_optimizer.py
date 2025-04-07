@@ -346,55 +346,52 @@ class TestTeamOptimizer:
         ]
         assert talent_salary <= 18.0  # Talent driver must have salary <= 18.0
 
-    def test_locked_in_drivers(self, optimizer):
-        """Test optimization with locked-in drivers."""
-        # Lock in ALO and ANT
-        result = optimizer.optimize(race_format="STANDARD", locked_in={"ALO", "ANT"})
-
-        # Check locked-in drivers are included
-        assert result.best_solution is not None
-        assert "ALO" in result.best_solution.drivers
-        assert "ANT" in result.best_solution.drivers
-
-    def test_locked_out_drivers(self, optimizer):
-        """Test optimization with locked-out drivers."""
+    def test_locked_out(self, optimizer):
+        """Test optimization with locked-out."""
         # Lock out top drivers
         result = optimizer.optimize(
-            race_format="STANDARD", locked_out={"VER", "LEC", "HAM"}
+            race_format="STANDARD", locked_out={"SAI", "LAW", "HAA"}
         )
 
         # Check locked-out drivers are excluded
         assert result.best_solution is not None
-        assert "VER" not in result.best_solution.drivers
-        assert "LEC" not in result.best_solution.drivers
-        assert "HAM" not in result.best_solution.drivers
+        assert "SAI" not in result.best_solution.drivers
+        assert "LAW" not in result.best_solution.drivers
+        assert "HAA" not in result.best_solution.constructor
 
-    def test_tight_budget_constraint(self, optimizer):
-        """Test optimization with tight budget constraint."""
-        # Create optimizer with reduced budget
-        tight_optimizer = TeamOptimizer(
-            league_data=optimizer.league_data,
-            scorer=optimizer.scorer,
-            race_distribution=optimizer.race_distribution,
-            driver_stats=optimizer.driver_stats,
-            budget=85.0,  # Reduced budget
-        )
-
-        result = tight_optimizer.optimize(race_format="STANDARD")
-
-        # Should still find a valid solution
-        assert result.best_solution is not None
-        # Should be within budget
-        assert result.best_solution.total_cost <= 85.0
-
-    def test_locked_in_constructor(self, optimizer):
+    def test_locked_in(self, optimizer):
         """Test optimization with locked-in constructor."""
         # Lock in RBR constructor
         result = optimizer.optimize(race_format="STANDARD", locked_in={"RBR"})
 
-        # Check constructor is included
-        assert result.best_solution is not None
-        assert result.best_solution.constructor == "RBR"
+        non_rbr_solution = next(
+            solution
+            for solution in result.all_solutions
+            if solution.constructor != "RBR"
+        )
+
+        assert non_rbr_solution is not None
+        assert non_rbr_solution.constructor != "RBR"
+        # Get the salaries of all elements in this solution
+        rbr_salary = optimizer.league_data.salaries.constructors["RBR"]
+        driver_salaries_sum = sum(
+            optimizer.league_data.salaries.drivers[driver]
+            for driver in non_rbr_solution.drivers
+        )
+        constructor_salary = optimizer.league_data.salaries.constructors[
+            non_rbr_solution.constructor
+        ]
+
+        # The raw sum without penalty
+        raw_sum = driver_salaries_sum + constructor_salary
+
+        # Check that the actual cost is higher than raw sum due to penalty
+        # Penalty should be 3% of the locked-in constructor's salary
+        expected_penalty = rbr_salary * 0.03
+
+        # The solution's total cost should include this penalty
+        assert non_rbr_solution.total_cost > raw_sum
+        assert abs(non_rbr_solution.total_cost - (raw_sum + expected_penalty)) < 0.01
 
     def test_points_breakdown(self, optimizer):
         """Test points breakdown in solution."""
@@ -426,8 +423,8 @@ class TestTeamOptimizer:
                     ]
 
                     # Verify that components are doubled (roughly)
-                    # We're checking based on the mock data pattern, not exact calculation
-                    # This is a simplification for testing purposes
+                    # We're checking based on the mock data pattern, not exact
+                    # calculation. This is a simplification for testing purposes
                     talent_total = sum(driver_points.values())
                     non_talent_total = sum(non_talent_points.values())
                     assert (

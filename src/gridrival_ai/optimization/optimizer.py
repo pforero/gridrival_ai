@@ -163,7 +163,7 @@ class TeamOptimizer:
         # Return result with all solutions and requested filters
         return OptimizationResult(
             all_solutions=all_solutions,
-            locked_in=locked_in,
+            locked_in=set(),
             locked_out=locked_out,
             budget=self.budget,
         )
