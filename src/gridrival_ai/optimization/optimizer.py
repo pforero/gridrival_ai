@@ -40,8 +40,6 @@ class TeamOptimizer:
     ----------
     league_data : FantasyLeagueData
         Current league state including salaries and constraints
-    scorer : ScoringCalculator
-        Calculator for expected points using the new points API
     race_distribution : RaceDistribution
         Distribution containing probabilities for all sessions and drivers
     driver_stats : Dict[str, float]
@@ -61,7 +59,6 @@ class TeamOptimizer:
     Examples
     --------
     >>> from gridrival_ai.data.fantasy import FantasyLeagueData
-    >>> from gridrival_ai.scoring.calculator import ScoringCalculator
     >>> from gridrival_ai.probabilities.distributions import RaceDistribution
     >>>
     >>> # Create prerequisites
@@ -75,13 +72,9 @@ class TeamOptimizer:
     >>> odds_data = {...}  # Dictionary of betting odds
     >>> race_dist = RaceDistribution.from_structured_odds(odds_data)
     >>>
-    >>> # Create scoring calculator
-    >>> scorer = ScoringCalculator()
-    >>>
     >>> # Create optimizer
     >>> optimizer = TeamOptimizer(
     ...     league_data=league_data,
-    ...     scorer=scorer,
     ...     race_distribution=race_dist,
     ...     driver_stats=driver_stats
     ... )
@@ -98,17 +91,16 @@ class TeamOptimizer:
     def __init__(
         self,
         league_data: FantasyLeagueData,
-        scorer: ScoringCalculator,
         race_distribution: RaceDistribution,
         driver_stats: Dict[str, float],
         budget: float = 100.0,
     ) -> None:
         """Initialize optimizer with league state."""
         self.league_data = league_data
-        self.scorer = scorer
         self.race_distribution = race_distribution
         self.driver_stats = driver_stats
         self.budget = budget
+        self._scorer = ScoringCalculator()  # Initialize the default scorer
 
     def optimize(
         self,
@@ -206,7 +198,7 @@ class TeamOptimizer:
 
             # Calculate expected points using the scoring calculator
             points_breakdown = (
-                self.scorer.expected_driver_points_from_race_distribution(
+                self._scorer.expected_driver_points_from_race_distribution(
                     race_dist=self.race_distribution,
                     driver_id=driver_id,
                     rolling_avg=self.driver_stats[driver_id],
@@ -281,7 +273,7 @@ class TeamOptimizer:
                 continue
 
             # Calculate expected constructor points
-            points_dict = self.scorer.expected_constructor_points(
+            points_dict = self._scorer.expected_constructor_points(
                 driver1_qual_dist=driver1_qual_dist,
                 driver1_race_dist=driver1_race_dist,
                 driver2_qual_dist=driver2_qual_dist,
