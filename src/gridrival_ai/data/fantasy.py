@@ -2,7 +2,7 @@
 Data structures for managing F1 fantasy league state.
 
 This module provides classes to manage the state of a GridRival F1 fantasy league,
-including driver/constructor salaries, performance metrics, and team constraints.
+including driver/constructor salaries and performance metrics.
 """
 
 from dataclasses import dataclass
@@ -99,59 +99,8 @@ class RollingAverages:
 
 
 @dataclass(frozen=True)
-class TeamConstraints:
-    """Container for team selection constraints.
-
-    Parameters
-    ----------
-    locked_in : Set[str]
-        Driver/constructor IDs that must be included in team
-    locked_out : Set[str]
-        Driver/constructor IDs that cannot be included in team
-
-    Notes
-    -----
-    An element cannot be both locked in and locked out.
-    All IDs must be valid driver or constructor IDs.
-
-    Examples
-    --------
-    >>> constraints = TeamConstraints(
-    ...     locked_in={"HAM", "RBR"},
-    ...     locked_out={"VER"}
-    ... )
-    """
-
-    locked_in: frozenset
-    locked_out: frozenset
-
-    def __post_init__(self) -> None:
-        """Validate constraint consistency.
-
-        Raises
-        ------
-        ValueError
-            If constraints are invalid or inconsistent
-        """
-        # Check for overlap between locked_in and locked_out
-        overlap = self.locked_in & self.locked_out
-        if overlap:
-            raise ValueError(f"Elements cannot be both locked in and out: {overlap}")
-
-        # Validate all IDs
-        valid_ids = VALID_DRIVER_IDS | VALID_CONSTRUCTOR_IDS
-        invalid_locked_in = self.locked_in - valid_ids
-        if invalid_locked_in:
-            raise ValueError(f"Invalid locked in IDs: {invalid_locked_in}")
-
-        invalid_locked_out = self.locked_out - valid_ids
-        if invalid_locked_out:
-            raise ValueError(f"Invalid locked out IDs: {invalid_locked_out}")
-
-
-@dataclass(frozen=True)
 class FantasyLeagueData:
-    """Complete fantasy league state.
+    """Fantasy league state containing salaries and performance metrics.
 
     Parameters
     ----------
@@ -159,8 +108,6 @@ class FantasyLeagueData:
         Current driver and constructor salaries
     averages : RollingAverages
         Driver performance averages
-    constraints : TeamConstraints
-        Team selection constraints
 
     Examples
     --------
@@ -168,15 +115,12 @@ class FantasyLeagueData:
     >>> data = FantasyLeagueData.from_dicts(
     ...     driver_salaries={"VER": 33.0, "HAM": 26.2},
     ...     constructor_salaries={"RBR": 30.0},
-    ...     rolling_averages={"VER": 1.5, "HAM": 3.2},
-    ...     locked_in={"HAM"},
-    ...     locked_out={"VER"}
+    ...     rolling_averages={"VER": 1.5, "HAM": 3.2}
     ... )
     """
 
     salaries: Salaries
     averages: RollingAverages
-    constraints: TeamConstraints
 
     @classmethod
     def from_dicts(
@@ -184,8 +128,6 @@ class FantasyLeagueData:
         driver_salaries: dict,
         constructor_salaries: dict,
         rolling_averages: dict,
-        locked_in: frozenset | None = None,
-        locked_out: frozenset | None = None,
     ) -> "FantasyLeagueData":
         """Create from dictionary inputs.
 
@@ -197,10 +139,6 @@ class FantasyLeagueData:
             Mapping of constructor IDs to salaries
         rolling_averages : Dict[str, float]
             Mapping of driver IDs to rolling averages
-        locked_in : Set[str] | None, optional
-            IDs that must be included, by default None
-        locked_out : Set[str] | None, optional
-            IDs that cannot be included, by default None
 
         Returns
         -------
@@ -212,50 +150,44 @@ class FantasyLeagueData:
         >>> data = FantasyLeagueData.from_dicts(
         ...     driver_salaries={"VER": 33.0},
         ...     constructor_salaries={"RBR": 30.0},
-        ...     rolling_averages={"VER": 1.5},
-        ...     locked_in={"HAM"},
-        ...     locked_out={"VER"}
+        ...     rolling_averages={"VER": 1.5}
         ... )
         """
         return cls(
             salaries=Salaries(driver_salaries, constructor_salaries),
             averages=RollingAverages(rolling_averages),
-            constraints=TeamConstraints(
-                locked_in=frozenset(locked_in or set()),
-                locked_out=frozenset(locked_out or set()),
-            ),
         )
 
-    def get_available_drivers(self) -> frozenset:
-        """Get IDs of drivers available for selection.
+    def get_all_drivers(self) -> frozenset:
+        """Get IDs of all available drivers.
 
         Returns
         -------
         Set[str]
-            IDs of available drivers (not locked out)
+            IDs of all drivers in the league
 
         Examples
         --------
         >>> data = FantasyLeagueData.from_dicts(...)
-        >>> available = data.get_available_drivers()
-        >>> "VER" in available
+        >>> all_drivers = data.get_all_drivers()
+        >>> "VER" in all_drivers
         True
         """
-        return frozenset(self.salaries.drivers) - self.constraints.locked_out
+        return frozenset(self.salaries.drivers)
 
-    def get_available_constructors(self) -> frozenset:
-        """Get IDs of constructors available for selection.
+    def get_all_constructors(self) -> frozenset:
+        """Get IDs of all available constructors.
 
         Returns
         -------
         Set[str]
-            IDs of available constructors (not locked out)
+            IDs of all constructors in the league
 
         Examples
         --------
         >>> data = FantasyLeagueData.from_dicts(...)
-        >>> available = data.get_available_constructors()
-        >>> "RBR" in available
+        >>> all_constructors = data.get_all_constructors()
+        >>> "RBR" in all_constructors
         True
         """
-        return frozenset(self.salaries.constructors) - self.constraints.locked_out
+        return frozenset(self.salaries.constructors)

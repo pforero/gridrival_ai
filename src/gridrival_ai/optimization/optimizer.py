@@ -179,7 +179,7 @@ class TeamOptimizer:
         driver_scores = {}
 
         # Get all available drivers
-        available_drivers = self.league_data.get_available_drivers()
+        available_drivers = self.league_data.get_all_drivers()
 
         # Calculate scores for each available driver
         for driver_id in available_drivers:
@@ -239,7 +239,7 @@ class TeamOptimizer:
         constructor_scores = {}
 
         # Get all available constructors
-        available_constructors = self.league_data.get_available_constructors()
+        available_constructors = self.league_data.get_all_constructors()
 
         # Calculate scores for each available constructor
         for constructor_id in available_constructors:

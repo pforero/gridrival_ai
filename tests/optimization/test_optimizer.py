@@ -112,8 +112,6 @@ def sample_league_data():
         driver_salaries=driver_salaries,
         constructor_salaries=constructor_salaries,
         rolling_averages={d: 2.0 for d in driver_salaries},
-        locked_in=set(),
-        locked_out=set(),
     )
 
     return league_data

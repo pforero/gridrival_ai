@@ -6,7 +6,6 @@ from gridrival_ai.data.fantasy import (
     FantasyLeagueData,
     RollingAverages,
     Salaries,
-    TeamConstraints,
 )
 
 
@@ -91,46 +90,6 @@ class TestRollingAverages:
             RollingAverages(invalid_averages)
 
 
-class TestTeamConstraints:
-    """Test suite for TeamConstraints class."""
-
-    def test_valid_creation(self):
-        """Test creating TeamConstraints with valid data."""
-        constraints = TeamConstraints(
-            locked_in=frozenset({"HAM", "RBR"}),
-            locked_out=frozenset({"VER", "FER"}),
-        )
-        assert "HAM" in constraints.locked_in
-        assert "VER" in constraints.locked_out
-
-    def test_empty_constraints(self):
-        """Test creating TeamConstraints with no constraints."""
-        constraints = TeamConstraints(
-            locked_in=frozenset(),
-            locked_out=frozenset(),
-        )
-        assert not constraints.locked_in
-        assert not constraints.locked_out
-
-    def test_invalid_ids(self):
-        """Test error on invalid IDs."""
-        with pytest.raises(ValueError, match="Invalid locked in IDs"):
-            TeamConstraints(
-                locked_in=frozenset({"INVALID"}),
-                locked_out=frozenset(),
-            )
-
-    def test_overlapping_constraints(self):
-        """Test error on overlapping constraints."""
-        with pytest.raises(
-            ValueError, match="Elements cannot be both locked in and out"
-        ):
-            TeamConstraints(
-                locked_in=frozenset({"HAM"}),
-                locked_out=frozenset({"HAM"}),
-            )
-
-
 class TestFantasyLeagueData:
     """Test suite for FantasyLeagueData class."""
 
@@ -145,60 +104,43 @@ class TestFantasyLeagueData:
             driver_salaries=valid_driver_salaries,
             constructor_salaries=valid_constructor_salaries,
             rolling_averages=valid_rolling_averages,
-            locked_in={"HAM"},
-            locked_out={"VER"},
         )
         assert data.salaries.drivers == valid_driver_salaries
         assert data.salaries.constructors == valid_constructor_salaries
         assert data.averages.values == valid_rolling_averages
-        assert "HAM" in data.constraints.locked_in
-        assert "VER" in data.constraints.locked_out
 
-    def test_get_available_drivers(
+    def test_get_all_drivers(
         self,
         valid_driver_salaries,
         valid_constructor_salaries,
         valid_rolling_averages,
     ):
-        """Test getting available drivers."""
+        """Test getting all drivers."""
         data = FantasyLeagueData.from_dicts(
             driver_salaries=valid_driver_salaries,
             constructor_salaries=valid_constructor_salaries,
             rolling_averages=valid_rolling_averages,
-            locked_out={"VER"},
         )
-        available = data.get_available_drivers()
-        assert "HAM" in available
-        assert "VER" not in available
+        all_drivers = data.get_all_drivers()
+        assert "VER" in all_drivers
+        assert "HAM" in all_drivers
+        assert "LEC" in all_drivers
+        assert len(all_drivers) == len(valid_driver_salaries)
 
-    def test_get_available_constructors(
+    def test_get_all_constructors(
         self,
         valid_driver_salaries,
         valid_constructor_salaries,
         valid_rolling_averages,
     ):
-        """Test getting available constructors."""
-        data = FantasyLeagueData.from_dicts(
-            driver_salaries=valid_driver_salaries,
-            constructor_salaries=valid_constructor_salaries,
-            rolling_averages=valid_rolling_averages,
-            locked_out={"RBR"},
-        )
-        available = data.get_available_constructors()
-        assert "MER" in available
-        assert "RBR" not in available
-
-    def test_default_empty_constraints(
-        self,
-        valid_driver_salaries,
-        valid_constructor_salaries,
-        valid_rolling_averages,
-    ):
-        """Test that constraints default to empty."""
+        """Test getting all constructors."""
         data = FantasyLeagueData.from_dicts(
             driver_salaries=valid_driver_salaries,
             constructor_salaries=valid_constructor_salaries,
             rolling_averages=valid_rolling_averages,
         )
-        assert not data.constraints.locked_in
-        assert not data.constraints.locked_out
+        all_constructors = data.get_all_constructors()
+        assert "RBR" in all_constructors
+        assert "MER" in all_constructors
+        assert "FER" in all_constructors
+        assert len(all_constructors) == len(valid_constructor_salaries)
